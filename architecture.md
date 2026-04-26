@@ -6,7 +6,7 @@ Quick-start reference for coding agents. Read this before touching any file.
 
 ## What it is
 
-A dark-mode survey builder. Users log in → build a survey on a drag-and-drop canvas → publish it → share a public link → view analytics.
+A dark-mode survey builder. Users land on the marketing page → sign up with email verification → build a survey on a drag-and-drop canvas → publish/unpublish it → share a public link → preview it → view analytics with logic debugger.
 
 ---
 
@@ -16,7 +16,9 @@ A dark-mode survey builder. Users log in → build a survey on a drag-and-drop c
 | ------------- | ---------------------------------------------------------------------------------------- |
 | Backend       | Node.js + Express 5, TypeScript                                                          |
 | ORM           | Prisma 5 + PostgreSQL                                                                    |
-| Auth          | JWT — access token 15 min, refresh token 7 days, bcrypt passwords                        |
+| Auth          | JWT — access token 15 min, refresh token 7 days, bcrypt passwords, OTP email verification |
+| Cache / OTP   | Redis (RedisLabs cloud) — OTP storage + rate-limit counters                             |
+| Email         | Nodemailer → Gmail SMTP                                                                  |
 | Validation    | Zod (server-side only)                                                                   |
 | Frontend      | React 19 + Vite 6                                                                        |
 | Styling       | Tailwind CSS v4 — configured via `@tailwindcss/vite` plugin, **no `tailwind.config.js`** |
@@ -26,6 +28,7 @@ A dark-mode survey builder. Users log in → build a survey on a drag-and-drop c
 | Data fetching | TanStack Query v5                                                                        |
 | Canvas        | @xyflow/react v12 (React Flow)                                                           |
 | Icons         | Lucide React — **only icon library used**                                                |
+| Env loading   | `dotenv` — loaded via `import 'dotenv/config'` as the first import in `server/src/index.ts` |
 
 ---
 
@@ -33,16 +36,24 @@ A dark-mode survey builder. Users log in → build a survey on a drag-and-drop c
 
 ```
 wdym/
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                 # Type-check both sides on every PR
+│       ├── deploy-frontend.yml    # Vercel deploy on client/** changes to main
+│       └── deploy-backend.yml     # Koyeb redeploy on server/** changes to main
+├── architecture.md                # This file
+├── ci-cd.md                       # CI/CD setup guide and what to configure
+├── vercel.json                    # SPA rewrites for Vercel
 ├── server/
 │   ├── prisma/
 │   │   └── schema.prisma          # Single source of truth for DB models
 │   └── src/
-│       ├── index.ts               # Express app entry — port 4000
+│       ├── index.ts               # Express entry — loads dotenv first, connects Redis, port 4000
 │       ├── controllers/
-│       │   ├── auth.ts            # register, login, refresh
-│       │   ├── surveys.ts         # CRUD + publish + analytics
+│       │   ├── auth.ts            # register, login, refresh, verifyOtp, resendOtp
+│       │   ├── surveys.ts         # CRUD + publish + unpublish + analytics
 │       │   ├── public.ts          # unauthenticated survey view + response tracking
-│       │   └── generate.ts        # AI survey generation (Claude API)
+│       │   └── generate.ts        # AI survey generation (Gemini + Claude)
 │       ├── routes/
 │       │   ├── auth.ts            # /auth/*
 │       │   ├── surveys.ts         # /surveys/* (all require auth middleware)
@@ -51,19 +62,25 @@ wdym/
 │       │   ├── auth.ts            # JWT verify → attaches req.userId
 │       │   └── cors.ts            # CORS config
 │       └── lib/
-│           └── prisma.ts          # Singleton Prisma client
+│           ├── prisma.ts          # Singleton Prisma client
+│           ├── redis.ts           # Redis client (createClient with REDIS_URL), connectRedis()
+│           └── mail.ts            # Nodemailer transporter, sendOtpEmail(to, otp)
 └── client/
     └── src/
         ├── main.tsx               # React root, RouterProvider, QueryClientProvider
-        ├── router.tsx             # All routes defined here
+        ├── router.tsx             # All routes — includes redirectIfAuth guard
         ├── pages/
-        │   ├── Login.tsx
-        │   ├── Register.tsx
-        │   ├── Dashboard.tsx      # Survey list, create/delete
-        │   ├── Builder.tsx        # Loads survey, wraps DragCanvas
+        │   ├── Landing.tsx        # Public marketing page at /
+        │   ├── Login.tsx          # Two-step: credentials → OTP if unverified
+        │   ├── Register.tsx       # Two-step: credentials → OTP verification
+        │   ├── Dashboard.tsx      # Survey list — create/delete/preview/unpublish
+        │   ├── Builder.tsx        # Loads survey, wraps DragCanvas, Settings + Preview buttons
+        │   ├── Preview.tsx        # Auth-guarded survey preview — no responses stored
         │   ├── Survey.tsx         # Public respondent view
-        │   └── Analytics.tsx      # Analytics page (overview/segments/responses tabs)
+        │   └── Analytics.tsx      # Overview / Segments / Responses tabs + Logic Debugger
         ├── components/
+        │   ├── auth/
+        │   │   └── OtpBoxes.tsx        # 6-box OTP input with paste + auto-advance
         │   ├── builder/
         │   │   ├── DragCanvas.tsx      # ReactFlowProvider → FlowCanvas
         │   │   ├── BlockNode.tsx       # Custom RF node renderer
@@ -71,9 +88,16 @@ wdym/
         │   │   ├── NodeConfigPanel.tsx # Floating right config panel
         │   │   ├── LogicEdge.tsx       # Custom RF edge with delete button
         │   │   ├── CommandPalette.tsx  # Cmd+K search
-        │   │   └── GenerateModal.tsx   # AI generation modal
+        │   │   ├── GenerateModal.tsx   # AI generation modal (⌘G)
+        │   │   └── SettingsModal.tsx   # Survey-level settings modal
+        │   ├── landing/
+        │   │   ├── Hero.tsx            # Two-column hero with coded builder mock
+        │   │   ├── Marquee.tsx         # CSS-only scrolling feature strip
+        │   │   ├── Features.tsx        # Bento-style feature cards
+        │   │   ├── HowItWorks.tsx      # 3-step explainer
+        │   │   └── Footer.tsx          # Wordmark + links
         │   ├── survey/
-        │   │   ├── PublicSurveyRenderer.tsx  # Drives survey flow for respondents
+        │   │   ├── PublicSurveyRenderer.tsx  # Drives survey flow; accepts preview?: boolean
         │   │   ├── QuestionBlock.tsx
         │   │   ├── RatingBlock.tsx
         │   │   ├── MatrixBlock.tsx
@@ -81,18 +105,18 @@ wdym/
         │   │   └── RecallBlock.tsx
         │   └── ui/
         │       ├── Button.tsx
-        │       ├── Input.tsx
+        │       ├── Input.tsx           # forwardRef — supports ref prop
         │       ├── Modal.tsx
         │       ├── Badge.tsx
         │       └── ThemeToggle.tsx
         ├── store/
         │   ├── auth.ts     # user, accessToken, refreshToken — persisted to localStorage (key: wdym-auth)
-        │   ├── builder.ts  # nodes, edges, title, isDirty, selectedNodeId
+        │   ├── builder.ts  # nodes, edges, title, settings, isDirty, selectedNodeId
         │   ├── survey.ts   # respondent in-progress state
         │   └── theme.ts    # dark/light toggle
         └── lib/
-            ├── api.ts      # axios instance with auth header + auto token refresh
-            └── utils.ts    # shared helpers
+            ├── api.ts      # axios instance (api) + publicApi; auto token refresh on 401
+            └── utils.ts    # shared helpers (debounce, formatDate, cn)
 ```
 
 ### Ignore these completely
@@ -115,12 +139,13 @@ wdym/
 
 ### User
 
-| Field     | Type        | Notes       |
-| --------- | ----------- | ----------- |
-| id        | String UUID | PK          |
-| email     | String      | unique      |
-| password  | String      | bcrypt hash |
-| createdAt | DateTime    |             |
+| Field         | Type        | Notes                                                                  |
+| ------------- | ----------- | ---------------------------------------------------------------------- |
+| id            | String UUID | PK                                                                     |
+| email         | String      | unique                                                                 |
+| password      | String      | bcrypt hash                                                            |
+| emailVerified | Boolean     | `@default(true)` — existing users are pre-verified; new users start as `false` |
+| createdAt     | DateTime    |                                                                        |
 
 ### Survey
 
@@ -131,9 +156,10 @@ wdym/
 | title       | String      |                                                                                        |
 | blocks      | Json        | `BlockNode[]` from React Flow — array of `{id, position, data:{blockType, config}}`    |
 | edges       | Json        | `Edge[]` from React Flow — array of `{id, source, target, sourceHandle, type:'logic'}` |
+| settings    | Json        | Survey-level settings object (theme, etc.) — `@default({})`                           |
 | views       | Int         | incremented on every `GET /s/:slug`                                                    |
 | published   | Boolean     | gate for public access                                                                 |
-| publishedAt | DateTime?   |                                                                                        |
+| publishedAt | DateTime?   | null when unpublished                                                                  |
 | userId      | String      | FK → User                                                                              |
 
 ### Response
@@ -154,22 +180,34 @@ wdym/
 ### Auth — `/auth/*` (no middleware)
 
 ```
-POST /auth/register      { email, password } → { user, accessToken, refreshToken }
-POST /auth/login         { email, password } → { user, accessToken, refreshToken }
-POST /auth/refresh       { refreshToken }    → { accessToken }
+POST /auth/register      { email, password }      → { requiresVerification: true, userId }
+POST /auth/login         { email, password }      → { user, accessToken, refreshToken }
+                                                     OR 403 { requiresVerification: true, userId }
+POST /auth/refresh       { refreshToken }          → { accessToken }
+POST /auth/verify-otp    { userId, otp }           → { user, accessToken, refreshToken }
+POST /auth/resend-otp    { userId }                → { ok: true }
 ```
+
+**OTP rules:**
+- OTP is 6 digits, valid for 5 minutes (stored in Redis `otp:{userId}`, TTL 300s)
+- Max **5 wrong attempts** per 15-minute window (`otp:attempts:{userId}`, TTL 900s) → 429 with minutes remaining
+- Max **3 resends** per hour (`otp:resend:{userId}`, TTL 3600s) → 429 with minutes remaining
+- Resending resets the attempt counter so the user gets a fresh 5 tries
+- Login with unverified account: issues a fresh OTP if none exists, returns 403
+- All validation errors return `{ error: string }` — never a Zod flatten object
 
 ### Surveys — `/surveys/*` (all require `Authorization: Bearer <accessToken>`)
 
 ```
 GET    /surveys                  → Survey[] (title, slug, published, views, _count.responses)
 POST   /surveys                  { title? } → Survey
-GET    /surveys/:id              → Survey (full, with blocks/edges)
-PATCH  /surveys/:id              { title?, blocks?, edges? } → Survey
+GET    /surveys/:id              → Survey (full, with blocks/edges/settings)
+PATCH  /surveys/:id              { title?, blocks?, edges?, settings? } → Survey
 DELETE /surveys/:id              → 204
-POST   /surveys/:id/publish      → Survey + { url }
+POST   /surveys/:id/publish      → Survey + { url: '/s/:slug' }
+POST   /surveys/:id/unpublish    → Survey (published: false, publishedAt: null)
 GET    /surveys/:id/analytics    → AnalyticsData (see below)
-POST   /surveys/:id/generate     { prompt } → { blocks, edges }
+POST   /surveys/:id/generate     { prompt, model } → { title, nodes, edges }
 ```
 
 **Analytics response shape:**
@@ -178,7 +216,7 @@ POST   /surveys/:id/generate     { prompt } → { blocks, edges }
 {
   title, views, blocks, edges, publishedAt, published,
   stats: { views, completed, started, forfeited, completionRate, viewToStart },
-  dropOff: { blockId, count }[],   // incomplete responses grouped by lastBlockId
+  dropOff: { blockId, count }[],       // incomplete responses grouped by lastBlockId
   responses: { id, createdAt, answers }[]  // completed only
 }
 ```
@@ -222,10 +260,10 @@ The `field` property on interactive blocks is the key used in `Response.answers`
 
 Zustand store, **not persisted**. Loaded from server on builder mount.
 
-- `nodes / edges / title` — React Flow state
-- `isDirty` — true whenever nodes/edges/title change; triggers save prompt
+- `nodes / edges / title / settings` — React Flow state + survey settings
+- `isDirty` — true whenever nodes/edges/title/settings change; triggers debounced auto-save
 - `selectedNodeId` — drives `NodeConfigPanel`
-- Key actions: `addNode`, `deleteNode`, `deleteEdge`, `updateNodeConfig`, `loadSurvey`, `markClean`
+- Key actions: `addNode`, `deleteNode`, `deleteEdge`, `updateNodeConfig`, `loadSurvey`, `markClean`, `setTitle`
 
 ### `useAuthStore` (`store/auth.ts`)
 
@@ -246,23 +284,69 @@ Dark/light toggle state.
 
 ## Auth flow
 
-1. Login → server returns `accessToken` (15 min) + `refreshToken` (7 days)
-2. `useAuthStore` persists both to localStorage
-3. `api.ts` request interceptor injects `Authorization: Bearer <accessToken>`
-4. `api.ts` response interceptor catches 401 → calls `POST /auth/refresh` → retries original request
-5. If refresh fails → `logout()` + redirect to `/login`
-6. Route guard in `router.tsx`: `beforeLoad: requireAuth` checks `useAuthStore.getState().accessToken`
+### Registration (new accounts)
+
+1. `POST /auth/register` → creates user with `emailVerified: false`, sends OTP email, returns `{ requiresVerification, userId }` (no tokens)
+2. Frontend slides to OTP step (6-box input, `OtpBoxes.tsx`)
+3. `POST /auth/verify-otp { userId, otp }` → validates OTP from Redis, marks `emailVerified: true`, returns tokens
+4. `useAuthStore.setAuth(...)` → navigate to `/dashboard`
+
+### Login (existing accounts)
+
+1. `POST /auth/login` → if `emailVerified: true`, returns tokens normally
+2. If `emailVerified: false` → issues fresh OTP (if no active one), returns 403 `{ requiresVerification, userId }`
+3. Frontend slides to OTP step — same flow as registration
+
+### Token lifecycle
+
+- `api.ts` request interceptor injects `Authorization: Bearer <accessToken>`
+- `api.ts` response interceptor catches 401 → calls `POST /auth/refresh` → retries original request
+- If refresh fails → `logout()` + redirect to `/login`
+
+### Route guards (`router.tsx`)
+
+- `requireAuth()` — redirects to `/login` if no `accessToken` (used on dashboard, builder, analytics, preview)
+- `redirectIfAuth()` — redirects to `/dashboard` if authenticated (used on `/`, `/login`, `/register`)
+
+---
+
+## Preview flow
+
+`/preview/:id` — auth-guarded page (only the survey owner can preview).
+
+- Fetches survey via `api.get('/surveys/:id')` (authenticated, so draft surveys work)
+- Renders `<PublicSurveyRenderer preview={true} onSubmit={() => {}} onProgress={() => {}} />`
+- No responses created or updated — all callbacks are no-ops
+- `PublicSurveyRenderer` detects `preview={true}` and shows "Preview complete — no response was saved." on completion instead of the normal thank-you message
+- Accessible from Dashboard (Play icon, opens in new tab) and Builder top bar (Play button)
 
 ---
 
 ## Survey response flow (public)
 
 1. Respondent opens `/s/:slug` → `GET /s/:slug` (views +1)
-2. `PublicSurveyRenderer` resolves block order by walking `edges` from the start node
+2. `PublicSurveyRenderer` resolves block order by walking `edges` from the start node (block with no incoming edges)
 3. On first answer → `POST /s/:slug/response { answers, lastBlockId }` → returns `{ id }` stored in `sessionStorage`
 4. On each subsequent answer → `PATCH /s/:slug/response/:id { answers, lastBlockId }`
 5. On final submit → `PATCH` with `{ completed: true }`
 6. If respondent closes mid-survey → `completed=false`, `lastBlockId` records where they stopped
+
+---
+
+## Analytics — Logic Debugger
+
+Inside the Responses tab, each response row has an "Answers | Logic trace" toggle.
+
+The trace replays the exact survey flow for that response:
+- Walks blocks from start using the same `if_else` / `switch` evaluation logic as `PublicSurveyRenderer`
+- For each block, records: what was answered, which condition evaluated TRUE/FALSE, which branch was taken, which was skipped
+- Uses a `visited` Set to prevent infinite loops on cyclic graphs
+
+Key types in `Analytics.tsx`:
+```ts
+type TraceStatus = 'answered' | 'skipped' | 'shown' | 'branch_true' | 'branch_false' | 'switch_match' | 'switch_miss' | 'terminal'
+interface TraceStep { blockId, blockType, label, status, answer?, conditionText?, conditionResult?, matchedCase?, branchTaken?, skippedBranchLabel? }
+```
 
 ---
 
@@ -274,7 +358,22 @@ Dark/light toggle state.
 - **Lucide React only** for icons — no emojis, no other icon libs
 - **No Tailwind config file** — all config is in `vite.config.ts` via `@tailwindcss/vite`
 - Dynamic Tailwind classes (e.g. `grid-cols-${n}`) do **not** work — use ternaries with full class strings
-- Inline styles are acceptable for dynamic colors/opacities that Tailwind can't express
+- Inline styles acceptable for dynamic colors/opacities that Tailwind can't express
+- Zod validation errors must always return `{ error: string }` to the client — never `error.flatten()` (which returns an object that crashes React rendering)
+
+---
+
+## Redis usage
+
+Redis is used exclusively for OTP management. All keys are scoped by `userId`.
+
+| Key                      | Value          | TTL      | Purpose                            |
+| ------------------------ | -------------- | -------- | ---------------------------------- |
+| `otp:{userId}`           | 6-digit string | 300s     | The active OTP                     |
+| `otp:attempts:{userId}`  | integer count  | 900s     | Wrong-guess counter (max 5)        |
+| `otp:resend:{userId}`    | integer count  | 3600s    | Resend counter (max 3/hour)        |
+
+On successful verification: all three keys are deleted. On resend: `otp:{userId}` is overwritten and `otp:attempts:{userId}` is deleted (fresh 5 tries).
 
 ---
 
@@ -286,15 +385,41 @@ Dark/light toggle state.
 DATABASE_URL=postgresql://...
 JWT_SECRET=...
 JWT_REFRESH_SECRET=...
-ANTHROPIC_API_KEY=...   # only needed for AI generation feature
-PORT=4000               # optional, defaults to 4000
+GEMINI_API_KEY=...              # AI generation
+ANTHROPIC_API_KEY=...           # AI generation
+PORT=4000                       # optional, defaults to 4000
+
+# Email (Gmail SMTP)
+JAVA_MAIL_HOST=smtp.gmail.com
+JAVA_MAIL_PORT=587
+JAVA_MAIL_USERNAME=...          # Gmail address
+JAVA_MAIL_PASSWORD=...          # Gmail app password
+
+# Redis
+REDIS_URL=redis://...           # Full connection string — used directly by createClient({ url })
 ```
+
+**Important:** `import 'dotenv/config'` MUST be the first import in `server/src/index.ts`. All other modules (especially `redis.ts`) call `createClient` at module evaluation time, so dotenv must run first. Using the individual `REDIS_SOCKET_HOST/PORT` fields on the `socket` option does not work reliably — always use `REDIS_URL`.
 
 ### Client (`client/.env`)
 
 ```
-VITE_API_URL=http://localhost:4000   # optional, this is the default
+VITE_API_URL=http://localhost:4000   # optional, defaults to this
 ```
+
+---
+
+## CI/CD
+
+Three GitHub Actions workflows. Full setup guide in `ci-cd.md`.
+
+| Workflow | Trigger | What it does |
+| --- | --- | --- |
+| `ci.yml` | PR to `main` | `tsc --noEmit` on both client and server in parallel |
+| `deploy-frontend.yml` | Push to `main`, `client/**` or `vercel.json` changed | Type-check → Vercel CLI pull/build/deploy |
+| `deploy-backend.yml` | Push to `main`, `server/**` changed | Type-check → `POST /v1/services/:id/redeploy` to Koyeb |
+
+**Required GitHub secrets:** `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `KOYEB_API_KEY`, `KOYEB_SERVICE_ID`
 
 ---
 
@@ -302,14 +427,15 @@ VITE_API_URL=http://localhost:4000   # optional, this is the default
 
 ```bash
 # Server
-cd server && npm run dev       # ts-node-dev, hot reload
+cd server && npm run dev          # tsx watch, hot reload, loads .env via dotenv
 
 # Client
-cd client && npm run dev       # Vite dev server, port 5173
+cd client && npm run dev          # Vite dev server, port 5173
 
-# DB schema changes
-cd server && npx prisma db push          # push schema changes (no migration file)
-cd server && npx prisma studio           # visual DB browser
+# DB schema changes — run after editing prisma/schema.prisma
+cd server && npx prisma db push   # push schema (no migration file)
+cd server && npx prisma generate  # regenerate Prisma client (required after schema change)
+cd server && npx prisma studio    # visual DB browser
 
 # Type check
 cd client && npx tsc --noEmit

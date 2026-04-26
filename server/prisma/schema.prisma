@@ -8,11 +8,12 @@ generator client {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  surveys   Survey[]
-  createdAt DateTime @default(now())
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password      String
+  emailVerified Boolean  @default(true)
+  surveys       Survey[]
+  createdAt     DateTime @default(now())
 }
 
 model Survey {

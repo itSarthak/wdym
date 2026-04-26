@@ -1,34 +1,94 @@
-import { useState } from "react";
-import { useNavigate, Link } from "@tanstack/react-router";
-import { motion } from "framer-motion";
-import { api } from "../lib/api";
-import { useAuthStore } from "../store/auth";
-import { Input } from "../components/ui/Input";
-import { Button } from "../components/ui/Button";
-import { ThemeToggle } from "../components/ui/ThemeToggle";
+import { useEffect, useState } from 'react'
+import { useNavigate, Link } from '@tanstack/react-router'
+import { motion, AnimatePresence } from 'framer-motion'
+import { api } from '../lib/api'
+import { useAuthStore } from '../store/auth'
+import { Input } from '../components/ui/Input'
+import { Button } from '../components/ui/Button'
+import { ThemeToggle } from '../components/ui/ThemeToggle'
+import { OtpBoxes } from '../components/auth/OtpBoxes'
+
+const RESEND_COOLDOWN = 60
 
 export default function Login() {
-  const navigate = useNavigate();
-  const { setAuth } = useAuthStore();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate()
+  const { setAuth } = useAuthStore()
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
+  const [step, setStep] = useState<'form' | 'otp'>('form')
+  const [userId, setUserId] = useState('')
+  const [maskedEmail, setMaskedEmail] = useState('')
+
+  // form step
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [formError, setFormError] = useState('')
+  const [formLoading, setFormLoading] = useState(false)
+
+  // otp step
+  const [otp, setOtp] = useState('')
+  const [otpError, setOtpError] = useState('')
+  const [otpLoading, setOtpLoading] = useState(false)
+  const [cooldown, setCooldown] = useState(0)
+
+  useEffect(() => {
+    if (step === 'otp') setCooldown(RESEND_COOLDOWN)
+  }, [step])
+
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const t = setInterval(() => setCooldown((c) => c - 1), 1000)
+    return () => clearInterval(t)
+  }, [cooldown])
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setFormError('')
+    setFormLoading(true)
     try {
-      const { data } = await api.post("/auth/login", { email, password });
-      setAuth(data.user, data.accessToken, data.refreshToken);
-      navigate({ to: "/dashboard" });
+      const { data } = await api.post('/auth/login', { email, password })
+      setAuth(data.user, data.accessToken, data.refreshToken)
+      navigate({ to: '/dashboard' })
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })
-        ?.response?.data?.error;
-      setError(msg || "Login failed");
+      const resp = (err as { response?: { data?: { error?: string; requiresVerification?: boolean; userId?: string } } })?.response
+      if (resp?.data?.requiresVerification && resp.data.userId) {
+        setUserId(resp.data.userId)
+        setMaskedEmail(email)
+        setStep('otp')
+        return
+      }
+      setFormError(resp?.data?.error || 'Login failed')
     } finally {
-      setLoading(false);
+      setFormLoading(false)
+    }
+  }
+
+  async function handleVerify(e: React.FormEvent) {
+    e.preventDefault()
+    if (otp.length !== 6) return
+    setOtpError('')
+    setOtpLoading(true)
+    try {
+      const { data } = await api.post('/auth/verify-otp', { userId, otp })
+      setAuth(data.user, data.accessToken, data.refreshToken)
+      navigate({ to: '/dashboard' })
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+      setOtpError(msg || 'Verification failed')
+      setOtp('')
+    } finally {
+      setOtpLoading(false)
+    }
+  }
+
+  async function handleResend() {
+    if (cooldown > 0) return
+    setOtpError('')
+    try {
+      await api.post('/auth/resend-otp', { userId })
+      setCooldown(RESEND_COOLDOWN)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+      setOtpError(msg || 'Could not resend code')
     }
   }
 
@@ -44,54 +104,94 @@ export default function Login() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
       >
-        <div className="mb-8">
-          <h1 className="text-xl font-semibold tracking-tight text-[#09090b] dark:text-white">
-            wdym
-          </h1>
-          <p className="text-sm text-[#71717a] dark:text-[#555] mt-1">
-            Sign in to your account
-          </p>
-        </div>
+        <AnimatePresence mode="wait">
+          {step === 'form' ? (
+            <motion.div
+              key="form"
+              initial={{ opacity: 0, x: -16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -16 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className="mb-8">
+                <h1 className="text-xl font-semibold tracking-tight text-[#09090b] dark:text-white">wdym</h1>
+                <p className="text-sm text-[#71717a] dark:text-[#555] mt-1">Sign in to your account</p>
+              </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <Input
-            id="email"
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            autoComplete="email"
-            required
-          />
-          <Input
-            id="password"
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            autoComplete="current-password"
-            required
-          />
+              <form onSubmit={handleLogin} className="flex flex-col gap-4">
+                <Input
+                  id="email"
+                  label="Email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  required
+                />
+                <Input
+                  id="password"
+                  label="Password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  required
+                />
+                {formError && <p className="text-xs text-red-500">{formError}</p>}
+                <Button type="submit" disabled={formLoading} className="mt-2">
+                  {formLoading ? 'Signing in…' : 'Sign in →'}
+                </Button>
+              </form>
 
-          {error && <p className="text-xs text-red-500">{error}</p>}
+              <p className="text-xs text-[#a1a1aa] dark:text-[#555] mt-6 text-center">
+                No account?{' '}
+                <Link to="/register" className="text-[#09090b] dark:text-white hover:underline">
+                  Register
+                </Link>
+              </p>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="otp"
+              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 16 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className="mb-8">
+                <h1 className="text-xl font-semibold tracking-tight text-[#09090b] dark:text-white">Verify your email</h1>
+                <p className="text-sm text-[#71717a] dark:text-[#555] mt-1">
+                  We sent a 6-digit code to <span className="text-[#09090b] dark:text-white">{maskedEmail}</span>
+                </p>
+              </div>
 
-          <Button type="submit" disabled={loading} className="mt-2">
-            {loading ? "Signing in…" : "Sign in →"}
-          </Button>
-        </form>
+              <form onSubmit={handleVerify} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-[#71717a] dark:text-[#888] tracking-wide">Verification code</span>
+                  <OtpBoxes onChange={setOtp} autoFocus />
+                </div>
+                {otpError && <p className="text-xs text-red-500">{otpError}</p>}
+                <Button type="submit" disabled={otpLoading || otp.length !== 6} className="mt-2">
+                  {otpLoading ? 'Verifying…' : 'Verify email →'}
+                </Button>
+              </form>
 
-        <p className="text-xs text-[#a1a1aa] dark:text-[#555] mt-6 text-center">
-          No account?{" "}
-          <Link
-            to="/register"
-            className="text-[#09090b] dark:text-white hover:underline"
-          >
-            Register
-          </Link>
-        </p>
+              <div className="mt-6 text-center">
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={cooldown > 0}
+                  className="text-xs text-[#a1a1aa] dark:text-[#555] hover:text-[#09090b] dark:hover:text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {cooldown > 0 ? `Resend code in ${cooldown}s` : 'Resend code'}
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
-  );
+  )
 }
