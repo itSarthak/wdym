@@ -24,6 +24,6 @@ export function authenticate(
     req.userId = payload.userId;
     next();
   } catch {
-    res.status(401).json({ error: "Invalid token!" });
+    res.status(401).json({ error: "Invalid token" });
   }
 }
