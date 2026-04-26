@@ -13,9 +13,14 @@ import {
   ArrowUpRight,
   Play,
   CloudOff,
+  Settings,
+  ChevronDown,
+  Check,
+  Layers,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuthStore } from "../store/auth";
+import type { Workspace } from "../store/auth";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
@@ -37,11 +42,18 @@ interface Survey {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
+  const { user, workspace, workspaces, setWorkspace, logout } = useAuthStore();
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+
+  function handleSwitchWorkspace(w: Workspace) {
+    setWorkspace(w)
+    setSwitcherOpen(false)
+    queryClient.invalidateQueries({ queryKey: ['surveys'] })
+  }
 
   const { data: surveys = [], isLoading } = useQuery<Survey[]>({
     queryKey: ["surveys"],
@@ -80,11 +92,57 @@ export default function Dashboard() {
     <div className="min-h-screen bg-white dark:bg-black text-[#09090b] dark:text-white">
       {/* Header */}
       <header className="border-b border-[#f4f4f5] dark:border-[#111] px-6 py-4 flex items-center justify-between">
-        <h1 className="text-sm font-semibold tracking-tight">wdym</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-sm font-semibold tracking-tight">wdym</h1>
+          {/* Workspace switcher */}
+          <div className="relative">
+            <button
+              onClick={() => setSwitcherOpen(o => !o)}
+              className="flex items-center gap-1 text-xs text-[#71717a] dark:text-[#888] hover:text-[#09090b] dark:hover:text-white transition-colors border border-[#f4f4f5] dark:border-[#1a1a1a] rounded px-2 py-1"
+            >
+              <Layers size={11} />
+              <span className="max-w-[120px] truncate">{workspace?.name ?? 'No workspace'}</span>
+              <ChevronDown size={11} />
+            </button>
+            {switcherOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setSwitcherOpen(false)} />
+                <div className="absolute left-0 top-full mt-1 z-20 w-52 bg-white dark:bg-[#0a0a0a] border border-[#f4f4f5] dark:border-[#1a1a1a] rounded-lg shadow-lg py-1 overflow-hidden">
+                  {workspaces.map(w => (
+                    <button
+                      key={w.id}
+                      onClick={() => handleSwitchWorkspace(w)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[#fafafa] dark:hover:bg-[#111] transition-colors"
+                    >
+                      <Check size={12} className={w.id === workspace?.id ? 'text-[#09090b] dark:text-white' : 'opacity-0'} />
+                      <span className="truncate">{w.name}</span>
+                    </button>
+                  ))}
+                  <div className="border-t border-[#f4f4f5] dark:border-[#1a1a1a] mt-1 pt-1">
+                    <button
+                      onClick={() => { setSwitcherOpen(false); navigate({ to: '/create-workspace' }) }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs text-[#a1a1aa] dark:text-[#555] hover:bg-[#fafafa] dark:hover:bg-[#111] transition-colors"
+                    >
+                      <Plus size={11} /> New workspace
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
         <div className="flex items-center gap-2">
-          <span className="text-xs text-[#a1a1aa] dark:text-[#555] mr-2">
+          <span className="text-xs text-[#a1a1aa] dark:text-[#555] mr-1 hidden sm:block">
             {user?.email}
           </span>
+          <button
+            onClick={() => navigate({ to: '/workspace/settings' })}
+            className="p-1.5 text-[#a1a1aa] dark:text-[#555] hover:text-[#09090b] dark:hover:text-white transition-colors"
+            title="Workspace settings"
+          >
+            <Settings size={14} />
+          </button>
           <ThemeToggle />
           <button
             onClick={handleLogout}

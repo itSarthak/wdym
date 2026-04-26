@@ -12,7 +12,7 @@ const RESEND_COOLDOWN = 60
 
 export default function Login() {
   const navigate = useNavigate()
-  const { setAuth } = useAuthStore()
+  const { setAuth, addWorkspace } = useAuthStore()
 
   const [step, setStep] = useState<'form' | 'otp'>('form')
   const [userId, setUserId] = useState('')
@@ -46,8 +46,18 @@ export default function Login() {
     setFormLoading(true)
     try {
       const { data } = await api.post('/auth/login', { email, password })
-      setAuth(data.user, data.accessToken, data.refreshToken)
-      navigate({ to: '/dashboard' })
+      setAuth(data.user, data.accessToken, data.refreshToken, data.workspaces ?? [])
+      const pendingInvite = sessionStorage.getItem('pendingInvite')
+      if (pendingInvite) {
+        try {
+          const { data: inv } = await api.post(`/invite/${pendingInvite}/accept`)
+          addWorkspace(inv.workspace)
+          sessionStorage.removeItem('pendingInvite')
+          navigate({ to: '/dashboard' })
+          return
+        } catch { sessionStorage.removeItem('pendingInvite') }
+      }
+      navigate({ to: (data.workspaces ?? []).length > 0 ? '/dashboard' : '/create-workspace' })
     } catch (err: unknown) {
       const resp = (err as { response?: { data?: { error?: string; requiresVerification?: boolean; userId?: string } } })?.response
       if (resp?.data?.requiresVerification && resp.data.userId) {
@@ -69,8 +79,18 @@ export default function Login() {
     setOtpLoading(true)
     try {
       const { data } = await api.post('/auth/verify-otp', { userId, otp })
-      setAuth(data.user, data.accessToken, data.refreshToken)
-      navigate({ to: '/dashboard' })
+      setAuth(data.user, data.accessToken, data.refreshToken, data.workspaces ?? [])
+      const pendingInvite = sessionStorage.getItem('pendingInvite')
+      if (pendingInvite) {
+        try {
+          const { data: inv } = await api.post(`/invite/${pendingInvite}/accept`)
+          addWorkspace(inv.workspace)
+          sessionStorage.removeItem('pendingInvite')
+          navigate({ to: '/dashboard' })
+          return
+        } catch { sessionStorage.removeItem('pendingInvite') }
+      }
+      navigate({ to: (data.workspaces ?? []).length > 0 ? '/dashboard' : '/create-workspace' })
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
       setOtpError(msg || 'Verification failed')

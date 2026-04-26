@@ -14,15 +14,32 @@ import Builder from './pages/Builder'
 import Survey from './pages/Survey'
 import Analytics from './pages/Analytics'
 import Preview from './pages/Preview'
+import CreateWorkspace from './pages/CreateWorkspace'
+import WorkspaceSettings from './pages/WorkspaceSettings'
+import InviteAccept from './pages/InviteAccept'
 
 function requireAuth() {
   const { accessToken } = useAuthStore.getState()
   if (!accessToken) throw redirect({ to: '/login' })
 }
 
+function requireWorkspace() {
+  const { accessToken, workspace } = useAuthStore.getState()
+  if (!accessToken) throw redirect({ to: '/login' })
+  if (!workspace) throw redirect({ to: '/create-workspace' })
+}
+
 function redirectIfAuth() {
-  const { accessToken } = useAuthStore.getState()
-  if (accessToken) throw redirect({ to: '/dashboard' })
+  const { accessToken, workspaces } = useAuthStore.getState()
+  if (accessToken) {
+    throw redirect({ to: workspaces.length > 0 ? '/dashboard' : '/create-workspace' })
+  }
+}
+
+function requireAuthNoWorkspace() {
+  const { accessToken, workspaces } = useAuthStore.getState()
+  if (!accessToken) throw redirect({ to: '/login' })
+  if (workspaces.length > 0) throw redirect({ to: '/dashboard' })
 }
 
 const rootRoute = createRootRoute({ component: () => <Outlet /> })
@@ -48,17 +65,37 @@ const registerRoute = createRoute({
   component: Register,
 })
 
+const createWorkspaceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/create-workspace',
+  beforeLoad: requireAuthNoWorkspace,
+  component: CreateWorkspace,
+})
+
+const workspaceSettingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/workspace/settings',
+  beforeLoad: requireWorkspace,
+  component: WorkspaceSettings,
+})
+
+const inviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/invite/$token',
+  component: InviteAccept,
+})
+
 const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/dashboard',
-  beforeLoad: requireAuth,
+  beforeLoad: requireWorkspace,
   component: Dashboard,
 })
 
 const builderRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/builder/$id',
-  beforeLoad: requireAuth,
+  beforeLoad: requireWorkspace,
   component: Builder,
 })
 
@@ -71,14 +108,14 @@ const surveyRoute = createRoute({
 const analyticsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/analytics/$id',
-  beforeLoad: requireAuth,
+  beforeLoad: requireWorkspace,
   component: Analytics,
 })
 
 const previewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/preview/$id',
-  beforeLoad: requireAuth,
+  beforeLoad: requireWorkspace,
   component: Preview,
 })
 
@@ -86,6 +123,9 @@ const routeTree = rootRoute.addChildren([
   landingRoute,
   loginRoute,
   registerRoute,
+  createWorkspaceRoute,
+  workspaceSettingsRoute,
+  inviteRoute,
   dashboardRoute,
   builderRoute,
   surveyRoute,

@@ -44,6 +44,15 @@ function generateOtp(): string {
   return String(Math.floor(100000 + Math.random() * 900000))
 }
 
+async function getUserWorkspaces(userId: string) {
+  const memberships = await prisma.workspaceMember.findMany({
+    where: { userId },
+    include: { workspace: { select: { id: true, name: true, slug: true, ownerId: true } } },
+    orderBy: { createdAt: 'asc' },
+  })
+  return memberships.map(m => m.workspace)
+}
+
 // Increment a Redis counter and set TTL only on first increment.
 // Returns the new count.
 async function rateLimitIncr(key: string, ttl: number): Promise<number> {
@@ -119,14 +128,17 @@ export async function verifyOtp(req: Request, res: Response) {
     prisma.user.update({ where: { id: userId }, data: { emailVerified: true } }),
   ])
 
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true } })
+  const [user, workspaces] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true } }),
+    getUserWorkspaces(userId),
+  ])
   if (!user) {
     res.status(404).json({ error: 'User not found' })
     return
   }
 
   const tokens = generateTokens(user.id)
-  res.json({ ...tokens, user: { id: user.id, email: user.email } })
+  res.json({ ...tokens, user: { id: user.id, email: user.email }, workspaces })
 }
 
 export async function resendOtp(req: Request, res: Response) {
@@ -196,8 +208,9 @@ export async function login(req: Request, res: Response) {
     return
   }
 
+  const workspaces = await getUserWorkspaces(user.id)
   const tokens = generateTokens(user.id)
-  res.json({ ...tokens, user: { id: user.id, email: user.email } })
+  res.json({ ...tokens, user: { id: user.id, email: user.email }, workspaces })
 }
 
 export async function refresh(req: Request, res: Response) {

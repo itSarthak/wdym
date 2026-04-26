@@ -10,6 +10,22 @@ const transporter = nodemailer.createTransport({
   },
 })
 
+export async function sendInviteEmail(to: string, workspaceName: string, inviteUrl: string) {
+  await transporter.sendMail({
+    from: `"wdym" <${process.env.JAVA_MAIL_USERNAME}>`,
+    to,
+    subject: `You've been invited to join ${workspaceName} on wdym`,
+    text: `You've been invited to join "${workspaceName}" on wdym.\n\nAccept your invitation: ${inviteUrl}\n\nThis invitation expires in 7 days. If you didn't expect this, ignore this email.`,
+    html: `
+<div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:420px;margin:0 auto;padding:24px">
+  <p style="font-size:18px;font-weight:600;color:#09090b;margin:0 0 6px">You're invited</p>
+  <p style="font-size:14px;color:#71717a;margin:0 0 24px">You've been invited to join <strong style="color:#09090b">${workspaceName}</strong> on wdym.</p>
+  <a href="${inviteUrl}" style="display:inline-block;background:#09090b;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:500">Accept invitation →</a>
+  <p style="font-size:12px;color:#a1a1aa;margin:24px 0 0">This invitation expires in 7 days. If you didn't expect this, ignore this email.</p>
+</div>`,
+  })
+}
+
 export async function sendOtpEmail(to: string, otp: string) {
   await transporter.sendMail({
     from: `"wdym" <${process.env.JAVA_MAIL_USERNAME}>`,
