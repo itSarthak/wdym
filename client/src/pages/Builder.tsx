@@ -4,7 +4,7 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Check, Copy, Loader2, Play, Sparkles, Settings2 } from 'lucide-react'
 import { api } from '../lib/api'
-import { useBuilderStore, BlockNode } from '../store/builder'
+import { useBuilderStore, BlockNode, SurveySettings } from '../store/builder'
 import { DragCanvas } from '../components/builder/DragCanvas'
 import { GenerateModal } from '../components/builder/GenerateModal'
 import { SettingsModal } from '../components/builder/SettingsModal'
@@ -15,7 +15,7 @@ import type { Edge, Node } from '@xyflow/react'
 
 interface SurveyData {
   id: string; title: string; blocks: BlockNode[]; edges: Edge[]
-  published: boolean; slug: string
+  published: boolean; slug: string; settings?: SurveySettings
 }
 
 export default function Builder() {
@@ -49,14 +49,13 @@ export default function Builder() {
   useEffect(() => {
     if (surveyData && !loaded.current) {
       loaded.current = true
-      // surveyData.settings might not be exactly typed in SurveyData, cast as any
-      store.loadSurvey(surveyData.blocks ?? [], surveyData.edges ?? [], surveyData.title, (surveyData as any).settings)
+      store.loadSurvey(surveyData.blocks ?? [], surveyData.edges ?? [], surveyData.title, surveyData.settings)
       if (surveyData.published) setPublishedUrl(`/s/${surveyData.slug}`)
     }
   }, [surveyData, store])
 
   const saveMutation = useMutation({
-    mutationFn: (payload: { title: string; blocks: unknown; edges: unknown }) =>
+    mutationFn: (payload: { title: string; blocks: unknown; edges: unknown; settings: unknown }) =>
       api.patch(`/surveys/${id}`, payload),
     onMutate: () => setSaveStatus('saving'),
     onSettled: () => {
