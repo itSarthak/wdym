@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    { "source": "/s/(.*)", "destination": "/index.html" },
+    { "source": "/builder/(.*)", "destination": "/index.html" },
+    { "source": "/analytics/(.*)", "destination": "/index.html" },
+    { "source": "/preview/(.*)", "destination": "/index.html" },
+    { "source": "/login", "destination": "/index.html" },
+    { "source": "/register", "destination": "/index.html" },
+    { "source": "/dashboard", "destination": "/index.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
