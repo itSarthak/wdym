@@ -1,0 +1,43 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  surveys   Survey[]
+  createdAt DateTime @default(now())
+}
+
+model Survey {
+  id          String     @id @default(uuid())
+  slug        String     @unique
+  title       String
+  blocks      Json       @default("[]")
+  edges       Json       @default("[]")
+  settings    Json       @default("{}")
+  views       Int        @default(0)
+  published   Boolean    @default(false)
+  publishedAt DateTime?
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  responses   Response[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Response {
+  id          String   @id @default(uuid())
+  surveyId    String
+  survey      Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  answers     Json     @default("{}")
+  completed   Boolean  @default(true)
+  lastBlockId String?
+  createdAt   DateTime @default(now())
+}

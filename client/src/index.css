@@ -1,0 +1,141 @@
+@import "@xyflow/react/dist/style.css";
+@import "tailwindcss";
+
+/* Class-based dark mode */
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Inter', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Light mode defaults ──────────────────────────────── */
+:root {
+  background: #ffffff;
+  color: #09090b;
+}
+
+/* ── Dark mode overrides ──────────────────────────────── */
+.dark {
+  background: #000000;
+  color: #ffffff;
+}
+
+/* ── React Flow: light ────────────────────────────────── */
+.react-flow__controls {
+  background: #ffffff !important;
+  border: 1px solid #e4e4e7 !important;
+  box-shadow: none !important;
+}
+
+.react-flow__controls-button {
+  background: #ffffff !important;
+  border-color: #e4e4e7 !important;
+  fill: #71717a !important;
+}
+
+.react-flow__controls-button:hover {
+  background: #f4f4f5 !important;
+}
+
+.react-flow__minimap {
+  background: #fafafa !important;
+  border: 1px solid #e4e4e7 !important;
+}
+
+.react-flow__edge-path {
+  stroke: #d4d4d8 !important;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #09090b !important;
+}
+
+.react-flow__handle {
+  background: #a1a1aa !important;
+  border-color: #e4e4e7 !important;
+  width: 8px !important;
+  height: 8px !important;
+}
+
+.react-flow__handle:hover {
+  background: #09090b !important;
+}
+
+/* ── React Flow: dark ─────────────────────────────────── */
+.dark .react-flow__background {
+  background: #000000 !important;
+}
+
+.dark .react-flow__controls {
+  background: #111111 !important;
+  border: 1px solid #222222 !important;
+}
+
+.dark .react-flow__controls-button {
+  background: #111111 !important;
+  border-color: #222222 !important;
+  fill: #888888 !important;
+}
+
+.dark .react-flow__controls-button:hover {
+  background: #222222 !important;
+}
+
+.dark .react-flow__minimap {
+  background: #0a0a0a !important;
+  border: 1px solid #1a1a1a !important;
+}
+
+.dark .react-flow__edge-path {
+  stroke: #444444 !important;
+}
+
+.dark .react-flow__edge.selected .react-flow__edge-path {
+  stroke: #ffffff !important;
+}
+
+.dark .react-flow__handle {
+  background: #444444 !important;
+  border-color: #222222 !important;
+}
+
+.dark .react-flow__handle:hover {
+  background: #ffffff !important;
+}
+
+.dark .react-flow__connection-line {
+  stroke: #888888 !important;
+}
+
+/* ── View Transitions (Theme Toggle) ──────────────────── */
+html.theme-transition::view-transition-group(root) {
+  animation-duration: 0.5s;
+}
+
+html.theme-transition::view-transition-old(root),
+html.theme-transition::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+html.theme-transition::view-transition-old(root) {
+  z-index: 1;
+}
+
+html.theme-transition::view-transition-new(root) {
+  z-index: 2;
+}
