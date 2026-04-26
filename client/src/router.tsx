@@ -20,23 +20,31 @@ function requireAuth() {
   if (!accessToken) throw redirect({ to: '/login' })
 }
 
+function redirectIfAuth() {
+  const { accessToken } = useAuthStore.getState()
+  if (accessToken) throw redirect({ to: '/dashboard' })
+}
+
 const rootRoute = createRootRoute({ component: () => <Outlet /> })
 
 const landingRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
+  beforeLoad: redirectIfAuth,
   component: Landing,
 })
 
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
+  beforeLoad: redirectIfAuth,
   component: Login,
 })
 
 const registerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/register',
+  beforeLoad: redirectIfAuth,
   component: Register,
 })
 
