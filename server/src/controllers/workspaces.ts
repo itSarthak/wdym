@@ -120,7 +120,7 @@ export async function inviteToWorkspace(req: AuthRequest, res: Response) {
   const workspace = await prisma.workspace.findUnique({ where: { id }, select: { name: true } })
   if (!workspace) { res.status(404).json({ error: 'Workspace not found' }); return }
 
-  // Check if this email is already a member
+  // If the email is already a member, reject early
   const existingUser = await prisma.user.findUnique({ where: { email }, select: { id: true } })
   if (existingUser) {
     const alreadyMember = await assertMember(id, existingUser.id)
@@ -128,19 +128,9 @@ export async function inviteToWorkspace(req: AuthRequest, res: Response) {
       res.status(409).json({ error: 'This person is already a member' })
       return
     }
-
-    // Existing user — add them directly
-    await prisma.workspaceMember.create({ data: { workspaceId: id, userId: existingUser.id } })
-
-    // Send notification email
-    const { sendInviteEmail } = await import('../lib/mail')
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
-    await sendInviteEmail(email, workspace.name, `${frontendUrl}/dashboard`)
-    res.json({ ok: true, joined: true })
-    return
   }
 
-  // New user — create/refresh invite
+  // Always send an invite link — existing users must accept via the link too
   const { randomBytes } = await import('crypto')
   const token = randomBytes(32).toString('hex')
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)

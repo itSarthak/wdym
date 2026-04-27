@@ -9,7 +9,7 @@ import { Layers } from 'lucide-react'
 
 export default function CreateWorkspace() {
   const navigate = useNavigate()
-  const { addWorkspace } = useAuthStore()
+  const { addWorkspace, setWorkspace } = useAuthStore()
 
   const [name, setName] = useState('')
   const [error, setError] = useState('')
@@ -23,6 +23,7 @@ export default function CreateWorkspace() {
     try {
       const { data } = await api.post('/workspaces', { name: name.trim() })
       addWorkspace(data)
+      setWorkspace(data)
       navigate({ to: '/dashboard' })
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error

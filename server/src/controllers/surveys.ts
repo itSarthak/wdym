@@ -5,6 +5,10 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
 
+function isFkViolation(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003'
+}
+
 const surveySchema = z.object({
   title: z.string().min(1).optional(),
   blocks: z.unknown().optional(),
@@ -13,8 +17,14 @@ const surveySchema = z.object({
 })
 
 export async function getSurveys(req: AuthRequest, res: Response) {
+  const workspaceId = req.headers['x-workspace-id'] as string | undefined
+  if (!workspaceId) {
+    res.status(400).json({ error: 'X-Workspace-Id header required' })
+    return
+  }
+
   const surveys = await prisma.survey.findMany({
-    where: { userId: req.userId! },
+    where: { userId: req.userId!, workspaceId },
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,
@@ -32,23 +42,38 @@ export async function getSurveys(req: AuthRequest, res: Response) {
 }
 
 export async function createSurvey(req: AuthRequest, res: Response) {
+  const workspaceId = req.headers['x-workspace-id'] as string | undefined
+  if (!workspaceId) {
+    res.status(400).json({ error: 'X-Workspace-Id header required' })
+    return
+  }
+
   const result = surveySchema.safeParse(req.body)
   if (!result.success) {
     res.status(400).json({ error: result.error.flatten() })
     return
   }
 
-  const survey = await prisma.survey.create({
-    data: {
-      slug: uuidv4(),
-      title: result.data.title || 'Untitled Survey',
-      blocks: (result.data.blocks ?? []) as Prisma.InputJsonValue,
-      edges: (result.data.edges ?? []) as Prisma.InputJsonValue,
-      settings: (result.data.settings ?? {}) as Prisma.InputJsonValue,
-      userId: req.userId!,
-    },
-  })
-  res.status(201).json(survey)
+  try {
+    const survey = await prisma.survey.create({
+      data: {
+        slug: uuidv4(),
+        title: result.data.title || 'Untitled Survey',
+        blocks: (result.data.blocks ?? []) as Prisma.InputJsonValue,
+        edges: (result.data.edges ?? []) as Prisma.InputJsonValue,
+        settings: (result.data.settings ?? {}) as Prisma.InputJsonValue,
+        userId: req.userId!,
+        workspaceId,
+      },
+    })
+    res.status(201).json(survey)
+  } catch (err) {
+    if (isFkViolation(err)) {
+      res.status(401).json({ error: 'Session expired. Please log in again.' })
+      return
+    }
+    throw err
+  }
 }
 
 export async function getSurvey(req: AuthRequest, res: Response) {

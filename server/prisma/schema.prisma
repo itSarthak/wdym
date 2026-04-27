@@ -38,6 +38,7 @@ model Workspace {
   owner     User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   members   WorkspaceMember[]
   invites   WorkspaceInvite[]
+  surveys   Survey[]
   createdAt DateTime          @default(now())
 }
 
@@ -77,6 +78,8 @@ model Survey {
   publishedAt DateTime?
   userId      String
   user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   responses   Response[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
