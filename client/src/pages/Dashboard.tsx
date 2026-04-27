@@ -137,7 +137,7 @@ export default function Dashboard() {
             {user?.email}
           </span>
           <button
-            onClick={() => navigate({ to: '/workspace/settings' })}
+            onClick={() => navigate({ to: '/settings' })}
             className="p-1.5 text-[#a1a1aa] dark:text-[#555] hover:text-[#09090b] dark:hover:text-white transition-colors"
             title="Workspace settings"
           >

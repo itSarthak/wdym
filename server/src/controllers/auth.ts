@@ -1,4 +1,5 @@
 import { Request, Response } from 'express'
+import { AuthRequest } from '../middleware/auth'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { z } from 'zod'
@@ -208,9 +209,40 @@ export async function login(req: Request, res: Response) {
     return
   }
 
+  // MFA check — issue a short-lived Redis temp token instead of full auth tokens
+  if (user.mfaEnabled) {
+    const { randomBytes } = await import('crypto')
+    const tempToken = randomBytes(32).toString('hex')
+    await redis.set(`mfa:temp:${tempToken}`, user.id, { EX: 300 })
+    res.json({ requiresMfa: true, tempToken })
+    return
+  }
+
   const workspaces = await getUserWorkspaces(user.id)
   const tokens = generateTokens(user.id)
   res.json({ ...tokens, user: { id: user.id, email: user.email }, workspaces })
+}
+
+export async function changePassword(req: AuthRequest, res: Response) {
+  const schema = z.object({
+    currentPassword: z.string(),
+    newPassword: z.string().min(8),
+  })
+  const result = schema.safeParse(req.body)
+  if (!result.success) {
+    res.status(400).json({ error: result.error.errors[0]?.message ?? 'Invalid request' })
+    return
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.userId! } })
+  if (!user) { res.status(404).json({ error: 'User not found' }); return }
+
+  const valid = await bcrypt.compare(result.data.currentPassword, user.password)
+  if (!valid) { res.status(400).json({ error: 'Current password is incorrect' }); return }
+
+  const hashed = await bcrypt.hash(result.data.newPassword, 12)
+  await prisma.user.update({ where: { id: req.userId! }, data: { password: hashed } })
+  res.json({ ok: true })
 }
 
 export async function refresh(req: Request, res: Response) {

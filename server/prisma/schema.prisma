@@ -12,10 +12,22 @@ model User {
   email                String            @unique
   password             String
   emailVerified        Boolean           @default(true)
+  mfaEnabled           Boolean           @default(false)
+  mfaSecret            String?
   surveys              Survey[]
   ownedWorkspaces      Workspace[]       @relation("WorkspaceOwner")
   workspaceMemberships WorkspaceMember[]
+  mfaBackupCodes       MfaBackupCode[]
   createdAt            DateTime          @default(now())
+}
+
+model MfaBackupCode {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
 }
 
 model Workspace {
