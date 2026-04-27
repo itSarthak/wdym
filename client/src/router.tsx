@@ -36,11 +36,6 @@ function redirectIfAuth() {
   }
 }
 
-function requireAuthNoWorkspace() {
-  const { accessToken, workspaces } = useAuthStore.getState()
-  if (!accessToken) throw redirect({ to: '/login' })
-  if (workspaces.length > 0) throw redirect({ to: '/dashboard' })
-}
 
 const rootRoute = createRootRoute({ component: () => <Outlet /> })
 
@@ -68,13 +63,13 @@ const registerRoute = createRoute({
 const createWorkspaceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/create-workspace',
-  beforeLoad: requireAuthNoWorkspace,
+  beforeLoad: requireAuth,
   component: CreateWorkspace,
 })
 
 const workspaceSettingsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/workspace/settings',
+  path: '/settings',
   beforeLoad: requireWorkspace,
   component: WorkspaceSettings,
 })

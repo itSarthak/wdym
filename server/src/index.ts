@@ -7,6 +7,7 @@ import surveyRoutes from './routes/surveys'
 import publicRoutes from './routes/public'
 import workspaceRoutes from './routes/workspaces'
 import inviteRoutes from './routes/invites'
+import mfaRoutes from './routes/mfa'
 
 const app = express()
 const PORT = process.env.PORT || 4000
@@ -19,6 +20,7 @@ app.use('/surveys', surveyRoutes)
 app.use('/s', publicRoutes)
 app.use('/workspaces', workspaceRoutes)
 app.use('/invite', inviteRoutes)
+app.use('/mfa', mfaRoutes)
 
 connectRedis()
   .then(() => app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`)))
