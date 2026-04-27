@@ -52,12 +52,12 @@ export default function Dashboard() {
   function handleSwitchWorkspace(w: Workspace) {
     setWorkspace(w)
     setSwitcherOpen(false)
-    queryClient.invalidateQueries({ queryKey: ['surveys'] })
   }
 
   const { data: surveys = [], isLoading } = useQuery<Survey[]>({
-    queryKey: ["surveys"],
+    queryKey: ["surveys", workspace?.id],
     queryFn: () => api.get("/surveys").then((r) => r.data),
+    enabled: !!workspace,
   });
 
   const createMutation = useMutation({

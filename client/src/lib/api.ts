@@ -11,9 +11,12 @@ export const publicApi = axios.create({
 })
 
 api.interceptors.request.use((config) => {
-  const { accessToken } = useAuthStore.getState()
+  const { accessToken, workspace } = useAuthStore.getState()
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`
+  }
+  if (workspace) {
+    config.headers['X-Workspace-Id'] = workspace.id
   }
   return config
 })
