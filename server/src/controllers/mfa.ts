@@ -39,8 +39,10 @@ function generateTokens(userId: string) {
 }
 
 function verifyTotp(token: string, secret: string): boolean {
+  // window: 2 → accepts codes from ±2 time steps (±60 s). window: 1 (±30 s)
+  // was too tight for production containers whose clocks can drift slightly.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result: any = verifySync({ token, secret, window: 1 } as any)
+  const result: any = verifySync({ token, secret, window: 2 } as any)
   return typeof result === 'boolean' ? result : Boolean(result?.valid)
 }
 
