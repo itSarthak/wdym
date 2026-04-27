@@ -6,9 +6,15 @@ import {
 } from '@xyflow/react'
 
 export interface SurveySettings {
+  // Survey / public renderer settings
   theme: 'dark' | 'light' | 'system'
   brandColor: string
   radius: 'none' | 'sm' | 'full'
+  // Canvas / builder settings
+  canvasBg: 'dots' | 'lines' | 'cross' | 'none'
+  canvasBgColor: string
+  minimap: boolean
+  snapToGrid: boolean
 }
 
 // ── Configs ────────────────────────────────────────────
@@ -119,7 +125,7 @@ export const useBuilderStore = create<BuilderState>((set) => ({
   nodes: [],
   edges: [],
   title: '',
-  settings: { theme: 'dark', brandColor: '#ffffff', radius: 'sm' },
+  settings: { theme: 'dark', brandColor: '#ffffff', radius: 'sm', canvasBg: 'dots', canvasBgColor: '', minimap: true, snapToGrid: false },
   isDirty: false,
   selectedNodeId: null,
 
@@ -165,7 +171,9 @@ export const useBuilderStore = create<BuilderState>((set) => ({
   loadSurvey: (nodes, edges, title, settings) =>
     set({
       nodes, edges, title,
-      settings: settings ?? { theme: 'dark', brandColor: '#ffffff', radius: 'sm' },
+      settings: settings
+        ? { theme: 'dark', brandColor: '#ffffff', radius: 'sm', canvasBg: 'dots', canvasBgColor: '', minimap: true, snapToGrid: false, ...settings }
+        : { theme: 'dark', brandColor: '#ffffff', radius: 'sm', canvasBg: 'dots', canvasBgColor: '', minimap: true, snapToGrid: false },
       isDirty: false, selectedNodeId: null
     }),
   markClean: () => set({ isDirty: false }),

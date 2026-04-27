@@ -19,6 +19,13 @@ import { useThemeStore } from '../../store/theme'
 const nodeTypes = { block: BlockNode }
 const edgeTypes = { logic: LogicEdge }
 
+function resolveVariant(bg: string): BackgroundVariant | undefined {
+  if (bg === 'dots') return BackgroundVariant.Dots
+  if (bg === 'lines') return BackgroundVariant.Lines
+  if (bg === 'cross') return BackgroundVariant.Cross
+  return undefined
+}
+
 function FlowCanvas() {
   const { screenToFlowPosition } = useReactFlow()
   const { theme } = useThemeStore()
@@ -26,6 +33,7 @@ function FlowCanvas() {
     nodes, edges,
     onNodesChange, onEdgesChange, onConnect,
     addNode, setSelectedNode,
+    settings,
   } = useBuilderStore()
 
   const [cmdOpen, setCmdOpen] = useState(false)
@@ -72,6 +80,11 @@ function FlowCanvas() {
   }
 
   const isDark = theme === 'dark'
+  const bgVariant = resolveVariant(settings.canvasBg)
+  // Custom bg color: if set, use it; otherwise fall back to theme defaults
+  const bgColor = settings.canvasBgColor
+    ? settings.canvasBgColor
+    : isDark ? '#1a1a1a' : '#e4e4e7'
 
   return (
     <div ref={canvasRef} className="flex-1 relative h-full">
@@ -91,20 +104,25 @@ function FlowCanvas() {
         deleteKeyCode={['Delete', 'Backspace']}
         proOptions={{ hideAttribution: true }}
         colorMode={isDark ? 'dark' : 'light'}
+        snapToGrid={settings.snapToGrid}
+        snapGrid={[16, 16]}
       >
-        <Background
-          variant={BackgroundVariant.Dots}
-          color={isDark ? '#1a1a1a' : '#e4e4e7'}
-          gap={24}
-          size={1}
-        />
+        {bgVariant !== undefined && (
+          <Background
+            variant={bgVariant}
+            color={bgColor}
+            gap={settings.canvasBg === 'cross' ? 32 : 24}
+            size={settings.canvasBg === 'dots' ? 2.5 : settings.canvasBg === 'cross' ? 6 : 1.5}
+          />
+        )}
         <Controls showInteractive={false} position="bottom-right" />
-        <MiniMap
-          position="bottom-right"
-          style={{ bottom: 48 }}
-          nodeColor={isDark ? '#222' : '#e4e4e7'}
-          maskColor={isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.7)'}
-        />
+        {settings.minimap && (
+          <MiniMap
+            position="bottom-left"
+            nodeColor={isDark ? '#222' : '#e4e4e7'}
+            maskColor={isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.7)'}
+          />
+        )}
       </ReactFlow>
 
       <NodeConfigPanel />
