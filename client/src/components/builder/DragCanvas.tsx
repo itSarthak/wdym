@@ -19,17 +19,40 @@ import { useThemeStore } from '../../store/theme'
 const nodeTypes = { block: BlockNode }
 const edgeTypes = { logic: LogicEdge }
 
-function FlowCanvas() {
+function resolveVariant(bg: string): BackgroundVariant | undefined {
+  if (bg === 'dots') return BackgroundVariant.Dots
+  if (bg === 'lines') return BackgroundVariant.Lines
+  if (bg === 'cross') return BackgroundVariant.Cross
+  return undefined
+}
+
+function FlowCanvas({ onRegisterAddBlock }: { onRegisterAddBlock?: (fn: (type: BlockType) => void) => void }) {
   const { screenToFlowPosition } = useReactFlow()
   const { theme } = useThemeStore()
   const {
     nodes, edges,
     onNodesChange, onEdgesChange, onConnect,
     addNode, setSelectedNode,
+    settings,
   } = useBuilderStore()
 
   const [cmdOpen, setCmdOpen] = useState(false)
   const canvasRef = useRef<HTMLDivElement>(null)
+
+  // Register mobile add-block handler so Builder's FAB can call it
+  useEffect(() => {
+    if (!onRegisterAddBlock) return
+    onRegisterAddBlock((type: BlockType) => {
+      const rect = canvasRef.current?.getBoundingClientRect()
+      const cx = rect ? rect.left + rect.width / 2 : window.innerWidth / 2
+      const cy = rect ? rect.top + rect.height / 2 : window.innerHeight / 2
+      const position = screenToFlowPosition({ x: cx, y: cy })
+      const id = crypto.randomUUID()
+      addNode({ id, type: 'block', position, data: { blockType: type, config: defaultConfig(type) } })
+      setSelectedNode(id)
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onRegisterAddBlock])
 
   // Cmd+K / Ctrl+K to open command palette
   useEffect(() => {
@@ -72,6 +95,23 @@ function FlowCanvas() {
   }
 
   const isDark = theme === 'dark'
+  const bgVariant = resolveVariant(settings.canvasBg)
+
+  // Resolve base hex color (custom or theme default)
+  const baseHex = settings.canvasBgColor || (isDark ? '#ffffff' : '#000000')
+  // Convert hex + opacity to rgba so pattern is subtle
+  const opacity = (settings.canvasBgOpacity ?? 30) / 100
+  function hexToRgba(hex: string, alpha: number): string {
+    const clean = hex.replace('#', '')
+    const full = clean.length === 3
+      ? clean.split('').map(c => c + c).join('')
+      : clean
+    const r = parseInt(full.slice(0, 2), 16)
+    const g = parseInt(full.slice(2, 4), 16)
+    const b = parseInt(full.slice(4, 6), 16)
+    return `rgba(${r},${g},${b},${alpha})`
+  }
+  const bgColor = hexToRgba(baseHex.startsWith('#') ? baseHex : '#888888', opacity)
 
   return (
     <div ref={canvasRef} className="flex-1 relative h-full">
@@ -91,20 +131,25 @@ function FlowCanvas() {
         deleteKeyCode={['Delete', 'Backspace']}
         proOptions={{ hideAttribution: true }}
         colorMode={isDark ? 'dark' : 'light'}
+        snapToGrid={settings.snapToGrid}
+        snapGrid={[16, 16]}
       >
-        <Background
-          variant={BackgroundVariant.Dots}
-          color={isDark ? '#1a1a1a' : '#e4e4e7'}
-          gap={24}
-          size={1}
-        />
+        {bgVariant !== undefined && (
+          <Background
+            variant={bgVariant}
+            color={bgColor}
+            gap={settings.canvasBg === 'cross' ? 32 : 24}
+            size={settings.canvasBg === 'dots' ? 2.5 : settings.canvasBg === 'cross' ? 6 : 1.5}
+          />
+        )}
         <Controls showInteractive={false} position="bottom-right" />
-        <MiniMap
-          position="bottom-right"
-          style={{ bottom: 48 }}
-          nodeColor={isDark ? '#222' : '#e4e4e7'}
-          maskColor={isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.7)'}
-        />
+        {settings.minimap && (
+          <MiniMap
+            position="bottom-left"
+            nodeColor={isDark ? '#222' : '#e4e4e7'}
+            maskColor={isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.7)'}
+          />
+        )}
       </ReactFlow>
 
       <NodeConfigPanel />
@@ -127,12 +172,12 @@ function FlowCanvas() {
   )
 }
 
-export function DragCanvas() {
+export function DragCanvas({ onRegisterAddBlock }: { onRegisterAddBlock?: (fn: (type: BlockType) => void) => void } = {}) {
   return (
     <ReactFlowProvider>
       <div className="w-full h-full flex">
         <BlockPalette />
-        <FlowCanvas />
+        <FlowCanvas onRegisterAddBlock={onRegisterAddBlock} />
       </div>
     </ReactFlowProvider>
   )

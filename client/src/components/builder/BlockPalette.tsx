@@ -16,6 +16,8 @@ const BLOCKS: { type: BlockType; label: string; description: string; icon: React
   { type: 'end',          label: 'End',           description: 'Terminal block',            icon: <Square size={13} /> },
 ]
 
+// ── Desktop sidebar palette ───────────────────────────
+
 export function BlockPalette() {
   function onDragStart(event: React.DragEvent, type: BlockType) {
     event.dataTransfer.setData('block-type', type)
@@ -23,7 +25,7 @@ export function BlockPalette() {
   }
 
   return (
-    <div className="w-44 shrink-0 h-full border-r border-[#f4f4f5] dark:border-[#111] bg-white dark:bg-black flex flex-col overflow-hidden">
+    <div className="hidden md:flex w-44 shrink-0 h-full border-r border-[#f4f4f5] dark:border-[#111] bg-white dark:bg-black flex-col overflow-hidden">
       <div className="px-3 pt-3 pb-2 shrink-0">
         <p className="text-[10px] text-[#a1a1aa] dark:text-[#444] uppercase tracking-widest px-1">Blocks</p>
       </div>
@@ -44,6 +46,32 @@ export function BlockPalette() {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+// ── Mobile block picker (bottom sheet list) ───────────
+
+export function MobileBlockList({
+  onSelect,
+}: {
+  onSelect: (type: BlockType) => void
+}) {
+  return (
+    <div className="flex flex-col gap-1 py-1">
+      {BLOCKS.map((block) => (
+        <button
+          key={block.type}
+          onClick={() => onSelect(block.type)}
+          className="flex items-center gap-3 px-4 py-3 hover:bg-[#f4f4f5] dark:hover:bg-[#111] transition-colors text-left w-full"
+        >
+          <span className="text-[#71717a] dark:text-[#888] shrink-0">{block.icon}</span>
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-[#09090b] dark:text-white leading-tight">{block.label}</p>
+            <p className="text-[10px] text-[#a1a1aa] dark:text-[#444] leading-tight">{block.description}</p>
+          </div>
+        </button>
+      ))}
     </div>
   )
 }

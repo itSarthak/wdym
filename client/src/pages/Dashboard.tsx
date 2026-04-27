@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
@@ -48,6 +48,17 @@ export default function Dashboard() {
   const [newTitle, setNewTitle] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const avatarLeaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleAvatarEnter() {
+    if (avatarLeaveTimer.current) clearTimeout(avatarLeaveTimer.current);
+    setAvatarOpen(true);
+  }
+
+  function handleAvatarLeave() {
+    avatarLeaveTimer.current = setTimeout(() => setAvatarOpen(false), 200);
+  }
 
   function handleSwitchWorkspace(w: Workspace) {
     setWorkspace(w)
@@ -133,23 +144,37 @@ export default function Dashboard() {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-[#a1a1aa] dark:text-[#555] mr-1 hidden sm:block">
-            {user?.email}
-          </span>
-          <button
-            onClick={() => navigate({ to: '/settings' })}
-            className="p-1.5 text-[#a1a1aa] dark:text-[#555] hover:text-[#09090b] dark:hover:text-white transition-colors"
-            title="Workspace settings"
-          >
-            <Settings size={14} />
-          </button>
           <ThemeToggle />
-          <button
-            onClick={handleLogout}
-            className="p-1.5 text-[#71717a] dark:text-[#888] hover:text-[#09090b] dark:hover:text-white transition-colors"
+          <div
+            className="relative"
+            onMouseEnter={handleAvatarEnter}
+            onMouseLeave={handleAvatarLeave}
           >
-            <LogOut size={14} />
-          </button>
+            <button className="w-7 h-7 rounded-full bg-[#fafafa] dark:bg-[#1a1a1a] border border-[#e4e4e7] dark:border-[#222] flex items-center justify-center text-xs font-semibold text-[#09090b] dark:text-white hover:border-[#a1a1aa] dark:hover:border-[#444] transition-colors">
+              {user?.email?.[0]?.toUpperCase() ?? '?'}
+            </button>
+            {avatarOpen && (
+              <div className="absolute right-0 top-full mt-1.5 z-20 w-52 bg-white dark:bg-[#0a0a0a] border border-[#f4f4f5] dark:border-[#1a1a1a] rounded-lg shadow-lg py-1 overflow-hidden">
+                <div className="px-3 py-2.5 border-b border-[#f4f4f5] dark:border-[#1a1a1a]">
+                  <p className="text-xs text-[#71717a] dark:text-[#555] truncate">{user?.email}</p>
+                </div>
+                <button
+                  onClick={() => { setAvatarOpen(false); navigate({ to: '/settings' }); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-[#09090b] dark:text-white hover:bg-[#fafafa] dark:hover:bg-[#111] transition-colors"
+                >
+                  <Settings size={13} className="text-[#a1a1aa] dark:text-[#555]" />
+                  Settings
+                </button>
+                <button
+                  onClick={() => { setAvatarOpen(false); handleLogout(); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-red-400/80 hover:bg-[#fafafa] dark:hover:bg-[#111] transition-colors"
+                >
+                  <LogOut size={13} />
+                  Log out
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 

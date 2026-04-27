@@ -6,9 +6,16 @@ import {
 } from '@xyflow/react'
 
 export interface SurveySettings {
+  // Survey / public renderer settings
   theme: 'dark' | 'light' | 'system'
   brandColor: string
   radius: 'none' | 'sm' | 'full'
+  // Canvas / builder settings
+  canvasBg: 'dots' | 'lines' | 'cross' | 'none'
+  canvasBgColor: string
+  canvasBgOpacity: number   // 0–100
+  minimap: boolean
+  snapToGrid: boolean
 }
 
 // ── Configs ────────────────────────────────────────────
@@ -119,7 +126,7 @@ export const useBuilderStore = create<BuilderState>((set) => ({
   nodes: [],
   edges: [],
   title: '',
-  settings: { theme: 'dark', brandColor: '#ffffff', radius: 'sm' },
+  settings: { theme: 'dark', brandColor: '#ffffff', radius: 'sm', canvasBg: 'dots', canvasBgColor: '', canvasBgOpacity: 30, minimap: true, snapToGrid: false },
   isDirty: false,
   selectedNodeId: null,
 
@@ -165,7 +172,9 @@ export const useBuilderStore = create<BuilderState>((set) => ({
   loadSurvey: (nodes, edges, title, settings) =>
     set({
       nodes, edges, title,
-      settings: settings ?? { theme: 'dark', brandColor: '#ffffff', radius: 'sm' },
+      settings: settings
+        ? (Object.assign({ theme: 'dark', brandColor: '#ffffff', radius: 'sm', canvasBg: 'dots', canvasBgColor: '', canvasBgOpacity: 30, minimap: true, snapToGrid: false }, settings) as SurveySettings)
+        : { theme: 'dark' as const, brandColor: '#ffffff', radius: 'sm' as const, canvasBg: 'dots' as const, canvasBgColor: '', canvasBgOpacity: 30, minimap: true, snapToGrid: false },
       isDirty: false, selectedNodeId: null
     }),
   markClean: () => set({ isDirty: false }),
