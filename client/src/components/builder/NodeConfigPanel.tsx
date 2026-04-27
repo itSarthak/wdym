@@ -7,6 +7,7 @@ import {
 } from '../../store/builder'
 import { Input } from '../ui/Input'
 import { Button } from '../ui/Button'
+import { useIsMobile } from '../../lib/useIsMobile'
 
 const selectCls =
   'h-9 px-3 text-sm bg-[#fafafa] dark:bg-[#111] border border-[#e4e4e7] dark:border-[#222] rounded text-[#09090b] dark:text-white focus:outline-none focus:border-[#a1a1aa] dark:focus:border-[#444]'
@@ -19,18 +20,43 @@ const labelCls = 'text-xs text-[#71717a] dark:text-[#888] tracking-wide'
 export function NodeConfigPanel() {
   const { nodes, selectedNodeId, setSelectedNode, deleteNode } = useBuilderStore()
   const node = nodes.find((n) => n.id === selectedNodeId)
+  const isMobile = useIsMobile()
+
+  // Mobile: bottom sheet; Desktop: right panel
+  const mobileProps = {
+    initial: { y: '100%', opacity: 0 },
+    animate: { y: 0, opacity: 1 },
+    exit: { y: '100%', opacity: 0 },
+    className:
+      'absolute bottom-0 left-0 right-0 max-h-[70vh] bg-[#fafafa] dark:bg-[#0a0a0a] border-t border-[#e4e4e7] dark:border-[#1a1a1a] flex flex-col z-20 rounded-t-xl',
+  }
+  const desktopProps = {
+    initial: { x: 320, opacity: 0 },
+    animate: { x: 0, opacity: 1 },
+    exit: { x: 320, opacity: 0 },
+    className:
+      'absolute right-0 top-0 h-full w-72 bg-[#fafafa] dark:bg-[#0a0a0a] border-l border-[#e4e4e7] dark:border-[#1a1a1a] flex flex-col z-10',
+  }
+  const props = isMobile ? mobileProps : desktopProps
 
   return (
     <AnimatePresence>
       {node && selectedNodeId && (
         <motion.div
           key="config-panel"
-          initial={{ x: 320, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: 320, opacity: 0 }}
+          initial={props.initial}
+          animate={props.animate}
+          exit={props.exit}
           transition={{ duration: 0.2 }}
-          className="absolute right-0 top-0 h-full w-72 bg-[#fafafa] dark:bg-[#0a0a0a] border-l border-[#e4e4e7] dark:border-[#1a1a1a] flex flex-col z-10"
+          className={props.className}
         >
+          {/* Mobile drag handle */}
+          {isMobile && (
+            <div className="flex justify-center pt-2.5 pb-1 shrink-0">
+              <div className="w-10 h-1 rounded-full bg-[#e4e4e7] dark:bg-[#333]" />
+            </div>
+          )}
+
           <div className="flex items-center justify-between px-4 py-3 border-b border-[#e4e4e7] dark:border-[#1a1a1a]">
             <span className="text-xs font-medium uppercase tracking-widest text-[#71717a] dark:text-[#888]">
               {node.data.blockType.replace(/_/g, ' ')}
