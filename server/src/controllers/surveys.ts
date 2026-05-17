@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth'
+import { encrypt } from '../lib/encrypt'
 
 function isFkViolation(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003'
@@ -76,6 +77,13 @@ export async function createSurvey(req: AuthRequest, res: Response) {
   }
 }
 
+function stripGoogleSecret(survey: { settings: Prisma.JsonValue; [key: string]: unknown }) {
+  const settings = survey.settings as Record<string, unknown> | null
+  if (!settings?.googleClientSecret) return survey
+  const { googleClientSecret: _omit, ...rest } = settings
+  return { ...survey, settings: rest }
+}
+
 export async function getSurvey(req: AuthRequest, res: Response) {
   const id = req.params.id as string
   const survey = await prisma.survey.findFirst({
@@ -85,7 +93,7 @@ export async function getSurvey(req: AuthRequest, res: Response) {
     res.status(404).json({ error: 'Survey not found' })
     return
   }
-  res.json(survey)
+  res.json(stripGoogleSecret(survey))
 }
 
 export async function updateSurvey(req: AuthRequest, res: Response) {
@@ -108,10 +116,22 @@ export async function updateSurvey(req: AuthRequest, res: Response) {
   if (result.data.title !== undefined) data.title = result.data.title
   if (result.data.blocks !== undefined) data.blocks = result.data.blocks as Prisma.InputJsonValue
   if (result.data.edges !== undefined) data.edges = result.data.edges as Prisma.InputJsonValue
-  if (result.data.settings !== undefined) data.settings = result.data.settings as Prisma.InputJsonValue
+  if (result.data.settings !== undefined) {
+    const incoming = result.data.settings as Record<string, unknown>
+    const existing = survey.settings as Record<string, unknown> | null
+
+    // Encrypt new secret if provided; otherwise preserve existing encrypted value
+    if (incoming.googleClientSecret && typeof incoming.googleClientSecret === 'string') {
+      incoming.googleClientSecret = encrypt(incoming.googleClientSecret)
+    } else if (!incoming.googleClientSecret && existing?.googleClientSecret) {
+      incoming.googleClientSecret = existing.googleClientSecret
+    }
+
+    data.settings = incoming as Prisma.InputJsonValue
+  }
 
   const updated = await prisma.survey.update({ where: { id }, data })
-  res.json(updated)
+  res.json(stripGoogleSecret(updated))
 }
 
 export async function deleteSurvey(req: AuthRequest, res: Response) {

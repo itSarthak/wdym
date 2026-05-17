@@ -36,14 +36,14 @@ export default function Testimonials() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-50px" }}
             transition={{ duration: 0.5, delay: i * 0.1 }}
-            className="bg-[#f0f0f0] dark:bg-[#0d0d0d] border border-black/8 dark:border-white/8 rounded-xl p-8 flex flex-col gap-6 relative"
+            className="bg-[#fafafa] dark:bg-[#111] border border-[#e4e4e7] dark:border-[#222] rounded p-8 flex flex-col gap-6 relative"
           >
             <Quote className="text-black/10 dark:text-white/20 w-8 h-8 absolute top-6 left-6" />
             <div className="pt-8">
-              <p className="text-sm leading-relaxed text-black/80 dark:text-white/80 mb-6">
+              <p className="text-sm leading-relaxed text-[#09090b] dark:text-white mb-6">
                 “{t.quote}”
               </p>
-              <div className="text-xs text-zinc-500 font-medium">
+              <div className="text-xs text-[#71717a] dark:text-[#555] font-medium">
                 {t.author}
               </div>
             </div>

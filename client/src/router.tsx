@@ -8,7 +8,6 @@ import {
 import { useAuthStore } from './store/auth'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
-import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import Builder from './pages/Builder'
 import Survey from './pages/Survey'
@@ -57,7 +56,7 @@ const registerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/register',
   beforeLoad: redirectIfAuth,
-  component: Register,
+  component: () => <Login initialTab="register" />,
 })
 
 const createWorkspaceRoute = createRoute({

@@ -3,11 +3,13 @@ import { useAuthStore } from '../store/auth'
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000',
+  withCredentials: true,
 })
 
-// For public survey respondents — no auth headers, no token refresh
+// For public survey respondents — no auth headers, sends cookies for auth wall
 export const publicApi = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000',
+  withCredentials: true,
 })
 
 api.interceptors.request.use((config) => {

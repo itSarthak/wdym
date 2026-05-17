@@ -103,7 +103,7 @@ export default function BlockShowcase() {
   const activeBlock = blocks.find(b => b.id === active) || blocks[0]
 
   return (
-    <section className="max-w-6xl mx-auto px-6 py-24 sm:py-32 border-b border-black/8 dark:border-white/8">
+    <section className="max-w-6xl mx-auto px-6 py-24 sm:py-32 border-b border-[#e4e4e7] dark:border-[#222]">
       <div className="text-center mb-16">
         <h2 className="text-3xl sm:text-4xl tracking-tight font-bold text-black dark:text-white">
           Every block you need.
@@ -119,8 +119,8 @@ export default function BlockShowcase() {
               onClick={() => setActive(block.id)}
               className={`text-left px-4 py-2.5 rounded-sm transition-all whitespace-nowrap min-w-max md:min-w-0 ${
                 active === block.id
-                  ? 'text-black dark:text-white border-l-2 md:border-b-0 border-b-2 border-black dark:border-white font-medium bg-black/5 dark:bg-white/5'
-                  : 'text-zinc-500 hover:text-black/80 dark:hover:text-white/80 border-l-2 md:border-b-0 border-b-2 border-transparent hover:bg-black/5 dark:hover:bg-white/5'
+                  ? 'text-[#09090b] dark:text-white border-l-2 md:border-b-0 border-b-2 border-[#09090b] dark:border-white font-medium bg-[#fafafa] dark:bg-[#111]'
+                  : 'text-[#71717a] dark:text-[#555] hover:text-[#09090b] dark:hover:text-white border-l-2 md:border-b-0 border-b-2 border-transparent hover:bg-[#fafafa] dark:hover:bg-[#111]'
               }`}
             >
               <div className="flex items-center gap-3">
@@ -134,7 +134,7 @@ export default function BlockShowcase() {
         {/* Right Panel */}
         <div className="flex-1 relative">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4/5 h-4/5 bg-black/10 dark:bg-white/10 blur-[120px] pointer-events-none rounded-full" />
-          <div className="relative z-10 bg-black/5 dark:bg-[#111] border border-black/10 dark:border-white/10 rounded-xl p-8 sm:p-12 min-h-[300px] flex flex-col justify-center overflow-hidden h-full">
+          <div className="relative z-10 bg-[#fafafa] dark:bg-[#111] border border-[#e4e4e7] dark:border-[#222] rounded p-8 sm:p-12 min-h-[300px] flex flex-col justify-center overflow-hidden h-full">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeBlock.id}
@@ -144,16 +144,16 @@ export default function BlockShowcase() {
                 transition={{ duration: 0.25 }}
                 className="flex flex-col gap-6"
               >
-                <div className="w-12 h-12 bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-lg flex items-center justify-center text-black dark:text-white shadow-sm">
+                <div className="w-10 h-10 bg-[#fafafa] dark:bg-[#111] border border-[#e4e4e7] dark:border-[#222] rounded-xl flex items-center justify-center text-[#09090b] dark:text-white">
                   <activeBlock.icon size={24} />
                 </div>
                 <div>
                   <h3 className="text-xl font-semibold mb-2 text-black dark:text-white">{activeBlock.name}</h3>
-                  <p className="text-zinc-500 leading-relaxed max-w-sm">
+                  <p className="text-[#71717a] dark:text-[#555] leading-relaxed max-w-sm">
                     {activeBlock.desc}
                   </p>
                 </div>
-                <div className="mt-4 p-6 bg-white dark:bg-black border border-black/10 dark:border-white/10 rounded-lg shadow-sm flex items-center justify-center h-48 w-full max-w-sm">
+                <div className="mt-4 p-6 bg-white dark:bg-black border border-[#e4e4e7] dark:border-[#222] rounded shadow-sm dark:shadow-none flex items-center justify-center h-48 w-full max-w-sm">
                   {activeBlock.preview}
                 </div>
               </motion.div>

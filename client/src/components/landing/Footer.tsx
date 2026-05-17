@@ -13,7 +13,7 @@ export default function Footer() {
           <span className="font-semibold tracking-tight text-black dark:text-white text-sm">
             wdym
           </span>
-          <span className="text-xs text-zinc-500">
+          <span className="text-xs text-[#71717a] dark:text-[#555]">
             &copy; {new Date().getFullYear()} wdym. All rights reserved.
           </span>
         </div>
@@ -26,7 +26,7 @@ export default function Footer() {
               href={href}
               target={external ? "_blank" : undefined}
               rel={external ? "noopener noreferrer" : undefined}
-              className="text-sm text-zinc-500 hover:text-black dark:hover:text-white transition-colors focus-visible:outline focus-visible:outline-black/50 dark:focus-visible:outline-white/50"
+              className="text-sm text-[#71717a] dark:text-[#555] hover:text-[#09090b] dark:hover:text-white transition-colors focus-visible:outline focus-visible:outline-black/50 dark:focus-visible:outline-white/50"
             >
               {label}
             </a>

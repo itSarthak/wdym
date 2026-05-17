@@ -21,7 +21,7 @@ export default function HowItWorks() {
     <section className="max-w-6xl mx-auto px-6 py-24" aria-labelledby="how-heading">
       <p
         id="how-heading"
-        className="text-xs text-zinc-600 uppercase tracking-widest mb-16"
+        className="text-xs text-[#71717a] dark:text-[#555] uppercase tracking-widest mb-16"
       >
         How it works
       </p>
@@ -45,7 +45,7 @@ export default function HowItWorks() {
                 {step.num}
               </div>
               <h3 className="text-lg font-semibold text-black dark:text-white mb-2">{step.title}</h3>
-              <p className="text-sm text-zinc-600 leading-relaxed">{step.copy}</p>
+              <p className="text-sm text-[#71717a] dark:text-[#555] leading-relaxed">{step.copy}</p>
             </div>
           ))}
         </div>

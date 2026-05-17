@@ -38,7 +38,7 @@ export default function Hero() {
             <br />get answered.
           </motion.h1>
 
-          <motion.p variants={itemVariants} className="text-zinc-500 text-lg leading-relaxed">
+          <motion.p variants={itemVariants} className="text-[#71717a] dark:text-[#555] text-lg leading-relaxed">
             Logic-first survey builder. Build flows that adapt to every respondent.
           </motion.p>
 
@@ -52,14 +52,14 @@ export default function Hero() {
             <Link
               to="/s/$slug"
               params={{ slug: 'demo' }}
-              className="inline-flex items-center gap-2 px-5 py-2.5 border border-black/20 dark:border-white/20 text-black dark:text-white rounded text-sm hover:border-black/40 dark:hover:border-white/40 transition-colors bg-white/5 dark:bg-transparent focus-visible:outline focus-visible:outline-black/50 dark:focus-visible:outline-white/50"
+              className="inline-flex items-center gap-2 px-5 py-2.5 border border-[#e4e4e7] dark:border-[#222] text-black dark:text-white rounded text-sm hover:border-[#a1a1aa] dark:hover:border-[#444] transition-colors bg-transparent focus-visible:outline focus-visible:outline-black/50 dark:focus-visible:outline-white/50"
               aria-label="See a live survey demo"
             >
               See it live
             </Link>
           </motion.div>
 
-          <motion.p variants={itemVariants} className="text-xs text-zinc-600">
+          <motion.p variants={itemVariants} className="text-xs text-[#71717a] dark:text-[#555]">
             Trusted by teams at Stripe, Notion, and Linear.
           </motion.p>
         </motion.div>

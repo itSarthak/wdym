@@ -10,7 +10,8 @@ generator client {
 model User {
   id                   String            @id @default(uuid())
   email                String            @unique
-  password             String
+  password             String?
+  googleId             String?           @unique
   emailVerified        Boolean           @default(true)
   mfaEnabled           Boolean           @default(false)
   mfaSecret            String?
@@ -67,22 +68,23 @@ model WorkspaceInvite {
 }
 
 model Survey {
-  id          String     @id @default(uuid())
-  slug        String     @unique
-  title       String
-  blocks      Json       @default("[]")
-  edges       Json       @default("[]")
-  settings    Json       @default("{}")
-  views       Int        @default(0)
-  published   Boolean    @default(false)
-  publishedAt DateTime?
-  userId      String
-  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspaceId String
-  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  responses   Response[]
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id              String           @id @default(uuid())
+  slug            String           @unique
+  title           String
+  blocks          Json             @default("[]")
+  edges           Json             @default("[]")
+  settings        Json             @default("{}")
+  views           Int              @default(0)
+  published       Boolean          @default(false)
+  publishedAt     DateTime?
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId     String
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  responses       Response[]
+  generateSession GenerateSession?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 }
 
 model Response {
@@ -94,3 +96,47 @@ model Response {
   lastBlockId String?
   createdAt   DateTime @default(now())
 }
+<<<<<<< Updated upstream
+=======
+
+model GenerateSession {
+  id        String            @id @default(uuid())
+  surveyId  String            @unique
+  survey    Survey            @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  messages  GenerateMessage[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+}
+
+model GenerateMessage {
+  id        String          @id @default(uuid())
+  sessionId String
+  session   GenerateSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String
+  content   String
+  createdAt DateTime        @default(now())
+}
+
+model HymnSession {
+  id          String        @id @default(uuid())
+  title       String        @default("New chat")
+  userId      String
+  workspaceId String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messages    HymnMessage[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model HymnMessage {
+  id        String      @id @default(uuid())
+  sessionId String
+  session   HymnSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String
+  content   String
+  action    String?
+  metadata  Json?
+  createdAt DateTime    @default(now())
+}
+>>>>>>> Stashed changes

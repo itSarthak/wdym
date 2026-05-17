@@ -233,11 +233,13 @@ export async function generateSurvey(req: AuthRequest, res: Response) {
     return
   }
 
+  const { prompt, model } = parsed.data
+
   let raw: string
   try {
-    raw = parsed.data.model === 'anthropic'
-      ? await callAnthropic(parsed.data.prompt)
-      : await callGemini(parsed.data.prompt)
+    raw = model === 'anthropic'
+      ? await callAnthropic(prompt)
+      : await callGemini(prompt)
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'AI generation failed.'
     console.error('Generate error:', msg)

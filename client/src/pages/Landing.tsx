@@ -33,7 +33,7 @@ function Navbar() {
         >
           <Link
             to="/login"
-            className="px-4 py-1.5 text-sm text-zinc-500 hover:text-black dark:text-zinc-400 dark:hover:text-white transition-colors rounded focus-visible:outline focus-visible:outline-black/50 dark:focus-visible:outline-white/50"
+            className="px-4 py-1.5 text-sm text-[#71717a] dark:text-[#555] hover:text-[#09090b] dark:hover:text-white transition-colors rounded focus-visible:outline focus-visible:outline-black/50 dark:focus-visible:outline-white/50"
           >
             Log in
           </Link>
@@ -60,7 +60,7 @@ function CTA() {
     >
       <div className="relative">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4/5 h-4/5 bg-black/10 dark:bg-white/10 blur-[120px] pointer-events-none rounded-full" />
-        <div className="relative z-10 bg-[#f0f0f0] dark:bg-[#0d0d0d] border border-black/8 dark:border-white/[0.08] rounded p-12 sm:p-16 flex flex-col items-center gap-8 text-center transition-colors">
+        <div className="relative z-10 bg-[#fafafa] dark:bg-[#111] border border-[#e4e4e7] dark:border-[#222] rounded p-12 sm:p-16 flex flex-col items-center gap-8 text-center transition-colors">
           <h2
             id="cta-heading"
             className="text-4xl tracking-tight text-black dark:text-white font-semibold"

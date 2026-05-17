@@ -3,7 +3,7 @@ import { useThemeStore } from '../../store/theme'
 import { AnimatePresence, motion } from 'framer-motion'
 import { MouseEvent } from 'react'
 
-export function ThemeToggle() {
+export function ThemeToggle({ imagePanel = false }: { imagePanel?: boolean }) {
   const { theme, toggle } = useThemeStore()
 
   const handleToggle = (e: MouseEvent<HTMLButtonElement>) => {
@@ -51,7 +51,13 @@ export function ThemeToggle() {
     <button
       onClick={handleToggle}
       title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-      className="relative flex items-center justify-center w-8 h-8 rounded text-zinc-500 hover:text-black dark:text-zinc-400 dark:hover:text-white transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+      className={`relative flex items-center justify-center w-8 h-8 rounded transition-colors ${
+        imagePanel
+          ? theme === 'dark'
+            ? 'text-white/90 hover:text-white bg-white/15 hover:bg-white/25'
+            : 'text-black/70 hover:text-black bg-black/10 hover:bg-black/20'
+          : 'text-[#71717a] hover:text-[#09090b] dark:text-[#555] dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'
+      }`}
     >
       <AnimatePresence mode="wait" initial={false}>
         <motion.div

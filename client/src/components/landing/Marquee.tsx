@@ -16,7 +16,7 @@ export default function Marquee() {
 
   return (
     <div
-      className="bg-[#f0f0f0] dark:bg-[#0a0a0a] border-y border-black/5 dark:border-white/5 py-3 overflow-hidden"
+      className="bg-[#fafafa] dark:bg-[#111] border-y border-[#e4e4e7] dark:border-[#222] py-3 overflow-hidden"
       aria-hidden="true"
     >
       {/* Keyframes injected once per mount — no JS scroll logic */}
@@ -36,7 +36,7 @@ export default function Marquee() {
         {doubled.map((item, i) => (
           <span
             key={i}
-            className="font-mono text-xs text-zinc-600 px-5 shrink-0 select-none"
+            className="font-mono text-xs text-[#71717a] dark:text-[#555] px-5 shrink-0 select-none"
           >
             {item} ·
           </span>

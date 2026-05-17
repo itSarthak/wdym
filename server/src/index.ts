@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import express from 'express'
+import cookieParser from 'cookie-parser'
 import { corsMiddleware } from './middleware/cors'
 import { connectRedis } from './lib/redis'
 import authRoutes from './routes/auth'
@@ -14,6 +15,7 @@ const PORT = process.env.PORT || 4000
 
 app.use(corsMiddleware)
 app.use(express.json())
+app.use(cookieParser())
 
 app.use('/auth', authRoutes)
 app.use('/surveys', surveyRoutes)

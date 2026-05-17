@@ -10,6 +10,15 @@ export interface SurveySettings {
   theme: 'dark' | 'light' | 'system'
   brandColor: string
   radius: 'none' | 'sm' | 'full'
+  responseLimit: number | null    // null = unlimited
+  closedMessage: string           // shown when limit is reached
+  // Auth wall settings
+  authRequired: boolean
+  authProvider: 'wdym' | 'google'
+  googleClientId: string
+  googleClientSecret: string      // write-only — never returned by server; empty on load
+  allowlist: string[]
+  allowlistMessage: string
   // Canvas / builder settings
   canvasBg: 'dots' | 'lines' | 'cross' | 'none'
   canvasBgColor: string
@@ -126,7 +135,7 @@ export const useBuilderStore = create<BuilderState>((set) => ({
   nodes: [],
   edges: [],
   title: '',
-  settings: { theme: 'dark', brandColor: '#ffffff', radius: 'sm', canvasBg: 'dots', canvasBgColor: '', canvasBgOpacity: 30, minimap: true, snapToGrid: false },
+  settings: { theme: 'dark', brandColor: '#ffffff', radius: 'sm', responseLimit: null, closedMessage: '', authRequired: false, authProvider: 'wdym', googleClientId: '', googleClientSecret: '', allowlist: [], allowlistMessage: '', canvasBg: 'dots', canvasBgColor: '', canvasBgOpacity: 30, minimap: true, snapToGrid: false },
   isDirty: false,
   selectedNodeId: null,
 
@@ -173,8 +182,8 @@ export const useBuilderStore = create<BuilderState>((set) => ({
     set({
       nodes, edges, title,
       settings: settings
-        ? (Object.assign({ theme: 'dark', brandColor: '#ffffff', radius: 'sm', canvasBg: 'dots', canvasBgColor: '', canvasBgOpacity: 30, minimap: true, snapToGrid: false }, settings) as SurveySettings)
-        : { theme: 'dark' as const, brandColor: '#ffffff', radius: 'sm' as const, canvasBg: 'dots' as const, canvasBgColor: '', canvasBgOpacity: 30, minimap: true, snapToGrid: false },
+        ? (Object.assign({ theme: 'dark', brandColor: '#ffffff', radius: 'sm', responseLimit: null, closedMessage: '', authRequired: false, authProvider: 'wdym', googleClientId: '', googleClientSecret: '', allowlist: [], allowlistMessage: '', canvasBg: 'dots', canvasBgColor: '', canvasBgOpacity: 30, minimap: true, snapToGrid: false }, settings, { googleClientSecret: '' }) as SurveySettings)
+        : { theme: 'dark' as const, brandColor: '#ffffff', radius: 'sm' as const, responseLimit: null, closedMessage: '', authRequired: false, authProvider: 'wdym' as const, googleClientId: '', googleClientSecret: '', allowlist: [] as string[], allowlistMessage: '', canvasBg: 'dots' as const, canvasBgColor: '', canvasBgOpacity: 30, minimap: true, snapToGrid: false },
       isDirty: false, selectedNodeId: null
     }),
   markClean: () => set({ isDirty: false }),

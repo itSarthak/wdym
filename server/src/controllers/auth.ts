@@ -180,6 +180,32 @@ export async function resendOtp(req: Request, res: Response) {
   res.json({ ok: true })
 }
 
+export async function googleAuth(req: Request, res: Response) {
+  const { accessToken } = req.body
+  if (!accessToken) { res.status(400).json({ error: 'Access token required' }); return }
+
+  const googleRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!googleRes.ok) { res.status(401).json({ error: 'Invalid Google token' }); return }
+
+  const { sub: googleId, email } = await googleRes.json() as { sub: string; email: string }
+
+  let user = await prisma.user.findFirst({ where: { OR: [{ googleId }, { email }] } })
+
+  if (user) {
+    if (!user.googleId) {
+      user = await prisma.user.update({ where: { id: user.id }, data: { googleId, emailVerified: true } })
+    }
+  } else {
+    user = await prisma.user.create({ data: { email, googleId, emailVerified: true } })
+  }
+
+  const workspaces = await getUserWorkspaces(user.id)
+  const tokens = generateTokens(user.id)
+  res.json({ ...tokens, user: { id: user.id, email: user.email }, workspaces })
+}
+
 export async function login(req: Request, res: Response) {
   const result = loginSchema.safeParse(req.body)
   if (!result.success) {
@@ -189,8 +215,8 @@ export async function login(req: Request, res: Response) {
 
   const { email, password } = result.data
   const user = await prisma.user.findUnique({ where: { email } })
-  if (!user || !(await bcrypt.compare(password, user.password))) {
-    res.status(401).json({ error: 'Invalid credentials' })
+  if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
+    res.status(401).json({ error: !user || user.password ? 'Invalid credentials' : 'Please sign in with Google' })
     return
   }
 
@@ -236,6 +262,7 @@ export async function changePassword(req: AuthRequest, res: Response) {
 
   const user = await prisma.user.findUnique({ where: { id: req.userId! } })
   if (!user) { res.status(404).json({ error: 'User not found' }); return }
+  if (!user.password) { res.status(400).json({ error: 'Account uses Google Sign-In — no password to change.' }); return }
 
   const valid = await bcrypt.compare(result.data.currentPassword, user.password)
   if (!valid) { res.status(400).json({ error: 'Current password is incorrect' }); return }
@@ -259,4 +286,91 @@ export async function refresh(req: Request, res: Response) {
   } catch {
     res.status(401).json({ error: 'Invalid refresh token' })
   }
+}
+
+export async function forgotPassword(req: Request, res: Response) {
+  const schema = z.object({ email: z.string().email() })
+  const result = schema.safeParse(req.body)
+  if (!result.success) { res.status(400).json({ error: 'Valid email required' }); return }
+
+  const { email } = result.data
+  const user = await prisma.user.findUnique({ where: { email } })
+  if (!user || !user.emailVerified) { res.json({ ok: true }); return }
+
+  const resends = await rateLimitIncr(`pwd:resend:${user.id}`, RESEND_TTL)
+  if (resends > MAX_RESENDS) {
+    const ttl = await redis.ttl(`pwd:resend:${user.id}`)
+    const mins = Math.ceil(ttl / 60)
+    res.status(429).json({ error: `Too many requests. Try again in ${mins} minute${mins !== 1 ? 's' : ''}.` })
+    return
+  }
+
+  const otp = generateOtp()
+  await Promise.all([
+    redis.set(`pwd:otp:${user.id}`, otp, { EX: OTP_TTL }),
+    redis.del(`pwd:attempts:${user.id}`),
+  ])
+  await sendOtpEmail(email, otp)
+  res.json({ ok: true, userId: user.id })
+}
+
+export async function verifyForgotOtp(req: Request, res: Response) {
+  const schema = z.object({
+    userId: z.string().uuid(),
+    otp: z.string().length(6).regex(/^\d+$/),
+  })
+  const result = schema.safeParse(req.body)
+  if (!result.success) { res.status(400).json({ error: result.error.errors[0]?.message ?? 'Invalid request' }); return }
+
+  const { userId, otp } = result.data
+
+  const attempts = await rateLimitIncr(`pwd:attempts:${userId}`, ATTEMPT_TTL)
+  if (attempts > MAX_ATTEMPTS) {
+    const ttl = await redis.ttl(`pwd:attempts:${userId}`)
+    const mins = Math.ceil(ttl / 60)
+    res.status(429).json({ error: `Too many attempts. Try again in ${mins} minute${mins !== 1 ? 's' : ''}.` })
+    return
+  }
+
+  const stored = await redis.get(`pwd:otp:${userId}`)
+  if (!stored) { res.status(400).json({ error: 'Code expired. Request a new one.' }); return }
+  if (stored !== otp) {
+    const remaining = MAX_ATTEMPTS - attempts
+    res.status(400).json({
+      error: remaining > 0
+        ? `Incorrect code. ${remaining} attempt${remaining !== 1 ? 's' : ''} left.`
+        : 'Too many attempts. Request a new code.',
+    })
+    return
+  }
+
+  await Promise.all([
+    redis.del(`pwd:otp:${userId}`),
+    redis.del(`pwd:attempts:${userId}`),
+  ])
+
+  const { randomBytes } = await import('crypto')
+  const resetToken = randomBytes(32).toString('hex')
+  await redis.set(`pwd:reset:${resetToken}`, userId, { EX: 600 })
+  res.json({ resetToken })
+}
+
+export async function resetPassword(req: Request, res: Response) {
+  const schema = z.object({
+    resetToken: z.string(),
+    newPassword: z.string().min(8),
+  })
+  const result = schema.safeParse(req.body)
+  if (!result.success) { res.status(400).json({ error: result.error.errors[0]?.message ?? 'Invalid request' }); return }
+
+  const { resetToken, newPassword } = result.data
+  const userId = await redis.get(`pwd:reset:${resetToken}`)
+  if (!userId) { res.status(400).json({ error: 'Reset link expired. Please start over.' }); return }
+
+  const hashed = await bcrypt.hash(newPassword, 12)
+  await Promise.all([
+    prisma.user.update({ where: { id: userId }, data: { password: hashed } }),
+    redis.del(`pwd:reset:${resetToken}`),
+  ])
+  res.json({ ok: true })
 }

@@ -43,12 +43,12 @@ function FeatureCard({ card }: { card: Card }) {
       whileHover={{ y: -4 }}
       transition={{ duration: 0.3, ease: 'easeOut' }}
       style={{ willChange: 'transform' }}
-      className={`bg-[#f0f0f0] dark:bg-[#0d0d0d] border border-black/8 dark:border-white/[0.08] hover:border-black/20 dark:hover:border-white/20 transition-colors rounded p-6 flex flex-col gap-4 ${card.wide ? 'md:col-span-2' : ''}`}
+      className={`bg-[#fafafa] dark:bg-[#111] border border-[#e4e4e7] dark:border-[#222] hover:border-[#a1a1aa] dark:hover:border-[#444] transition-colors rounded p-6 flex flex-col gap-4 ${card.wide ? 'md:col-span-2' : ''}`}
     >
-      <span className="text-zinc-500">{card.icon}</span>
+      <span className="text-[#71717a] dark:text-[#555]">{card.icon}</span>
       <div className="flex flex-col gap-1.5">
         <h3 className="text-sm font-semibold text-black dark:text-white">{card.title}</h3>
-        <p className="text-sm text-zinc-600 leading-relaxed">{card.description}</p>
+        <p className="text-sm text-[#71717a] dark:text-[#555] leading-relaxed">{card.description}</p>
       </div>
     </motion.div>
   )
@@ -59,7 +59,7 @@ export default function Features() {
     <section className="max-w-6xl mx-auto px-6 py-24" aria-labelledby="features-heading">
       <p
         id="features-heading"
-        className="text-xs text-zinc-600 uppercase tracking-widest mb-10"
+        className="text-xs text-[#71717a] dark:text-[#555] uppercase tracking-widest mb-10"
       >
         Features
       </p>

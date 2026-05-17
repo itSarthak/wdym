@@ -7,15 +7,15 @@ export default function ShortcutStrip() {
   ]
 
   return (
-    <div className="w-full bg-[#f0f0f0] dark:bg-[#0a0a0a] border-y border-black/5 dark:border-white/5 py-4 overflow-hidden">
+    <div className="w-full bg-[#fafafa] dark:bg-[#111] border-y border-[#e4e4e7] dark:border-[#222] py-4 overflow-hidden">
       <div className="max-w-6xl mx-auto px-6 hide-scrollbar overflow-x-auto whitespace-nowrap">
         <div className="flex items-center justify-center sm:gap-12 gap-8 w-max sm:w-full mx-auto">
           {shortcuts.map((s, i) => (
             <div key={i} className="flex items-center gap-3">
-              <kbd className="bg-black/5 dark:bg-white/8 border border-black/10 dark:border-white/15 rounded text-xs px-2 py-1 font-mono text-black dark:text-white shadow-sm font-medium">
+              <kbd className="bg-[#fafafa] dark:bg-[#111] border border-[#e4e4e7] dark:border-[#222] rounded text-xs px-2 py-1 font-mono text-[#09090b] dark:text-white shadow-sm dark:shadow-none font-medium">
                 {s.key}
               </kbd>
-              <span className="text-xs text-zinc-500">{s.label}</span>
+              <span className="text-xs text-[#71717a] dark:text-[#555]">{s.label}</span>
             </div>
           ))}
         </div>

@@ -3,11 +3,13 @@ import { useParams, useNavigate } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  ArrowLeft, Check, Copy, Loader2, Sparkles, Settings2, X, AlertCircle,
+  ArrowLeft, Check, Copy, Loader2, Sparkles, Settings2, X,
   LayoutGrid, SlidersHorizontal, Radio, Play, Download, Code2,
   ExternalLink, Globe, GlobeLock, FileJson, FileText, QrCode,
-  Bell, BarChart2, Clock, ChevronRight, Plus, MoreHorizontal,
+  Bell, BarChart2, Clock, ChevronRight, Plus, MoreHorizontal, ArrowUp,
+  Upload, Lock,
 } from 'lucide-react'
+import Papa from 'papaparse'
 import { api } from '../lib/api'
 import { useBuilderStore, BlockNode, SurveySettings, BlockType, defaultConfig } from '../store/builder'
 import { DragCanvas } from '../components/builder/DragCanvas'
@@ -21,6 +23,16 @@ import type { Edge, Node } from '@xyflow/react'
 type Provider = 'gemini' | 'anthropic'
 type ActivePanel = 'settings' | 'generate' | 'publish' | null
 type SettingsTab = 'survey' | 'canvas'
+
+interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: number
+  changes?: { added: number; removed: number; modified: number }
+  loading?: boolean
+  error?: string
+}
 
 interface SurveyData {
   id: string; title: string; blocks: BlockNode[]; edges: Edge[]
@@ -163,6 +175,8 @@ function BuilderContent({ id }: { id: string }) {
   const [publishedAt, setPublishedAt] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [copiedEmbed, setCopiedEmbed] = useState(false)
+  const [embedModalOpen, setEmbedModalOpen] = useState(false)
+  const [surveySlug, setSurveySlug] = useState<string | null>(null)
   const [titleEditing, setTitleEditing] = useState(false)
 
   const [activePanel, setActivePanel] = useState<ActivePanel>(null)
@@ -174,10 +188,12 @@ function BuilderContent({ id }: { id: string }) {
   const [mobileSheet, setMobileSheet] = useState<ActivePanel>(null)
   const [mobileSettingsTab, setMobileSettingsTab] = useState<SettingsTab>('survey')
 
-  const [genPrompt, setGenPrompt] = useState('')
-  const [genProvider, setGenProvider] = useState<Provider>('gemini')
-  const [genLoading, setGenLoading] = useState(false)
-  const [genError, setGenError] = useState<string | null>(null)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatProvider, setChatProvider] = useState<Provider>(
+    () => (localStorage.getItem('wdym:generate:provider') as Provider) ?? 'gemini'
+  )
+  const [chatLoading, setChatLoading] = useState(false)
 
   const loaded = useRef(false)
   const panelResizing = useRef(false)
@@ -207,9 +223,16 @@ function BuilderContent({ id }: { id: string }) {
       loaded.current = true
       store.loadSurvey(surveyData.blocks ?? [], surveyData.edges ?? [], surveyData.title, surveyData.settings)
       setIsPublished(surveyData.published)
+      setSurveySlug(surveyData.slug)
       if (surveyData.published) {
         setPublishedUrl(`/s/${surveyData.slug}`)
         setPublishedAt(surveyData.publishedAt ?? null)
+      }
+      const hymnPrompt = sessionStorage.getItem(`hymn:${id}`)
+      if (hymnPrompt) {
+        sessionStorage.removeItem(`hymn:${id}`)
+        setActivePanel('generate')
+        setTimeout(() => handleChatSend(hymnPrompt), 150)
       }
     }
   }, [surveyData, store])
@@ -231,6 +254,7 @@ function BuilderContent({ id }: { id: string }) {
       setPublishedUrl(res.data.url)
       setIsPublished(true)
       setPublishedAt(new Date().toISOString())
+      if (!surveySlug) setSurveySlug(res.data.url.replace('/s/', ''))
     },
   })
 
@@ -292,23 +316,64 @@ function BuilderContent({ id }: { id: string }) {
     a.click()
   }
 
-  async function handleGenerate() {
-    if (!genPrompt.trim() || genLoading) return
-    setGenError(null)
-    setGenLoading(true)
+  async function handleChatSend(overrideInput?: string) {
+    const input = (overrideInput !== undefined ? overrideInput : chatInput).trim()
+    if (!input || chatLoading) return
+
+    const userMsgId = `${Date.now()}-u`
+    const asstMsgId = `${Date.now()}-a`
+
+    if (overrideInput === undefined) setChatInput('')
+    setChatLoading(true)
+    setChatMessages((prev) => [
+      ...prev,
+      { id: userMsgId, role: 'user', content: input, timestamp: Date.now() },
+      { id: asstMsgId, role: 'assistant', content: '', timestamp: Date.now(), loading: true },
+    ])
+
+    const { nodes: oldNodes, edges: oldEdges, title: oldTitle } = useBuilderStore.getState()
+    const isEdit = oldNodes.length > 0
+
     try {
-      const res = await api.post(`/surveys/${id}/generate`, { prompt: genPrompt.trim(), model: genProvider })
-      const result = res.data as { title: string; nodes: Node[]; edges: Edge[] }
+      const payload: Record<string, unknown> = { prompt: input, model: chatProvider }
+      if (isEdit) {
+        payload.currentSurvey = {
+          title: oldTitle,
+          nodes: oldNodes.map((n) => ({ id: n.id, blockType: n.data.blockType, config: n.data.config })),
+          edges: oldEdges.map((e) => ({ source: e.source, target: e.target, sourceHandle: (e as { sourceHandle?: string }).sourceHandle ?? 'out' })),
+          positions: oldNodes.map((n) => ({ id: n.id, x: n.position.x, y: n.position.y })),
+        }
+      }
+
+      const res = await api.post(`/surveys/${id}/generate`, payload)
+      const result = res.data as { title: string; nodes: BlockNode[]; edges: Edge[]; changes: { added: number; removed: number; modified: number }; isEdit: boolean }
+
       store.loadSurvey(result.nodes as BlockNode[], result.edges, result.title)
       useBuilderStore.setState({ isDirty: true })
-      setGenPrompt('')
-      setActivePanel(null)
-      setMobileSheet(null)
+
+      const { added, removed, modified } = result.changes
+      const parts: string[] = []
+      if (!result.isEdit) parts.push('Survey created')
+      else {
+        if (added > 0) parts.push(`${added} block${added !== 1 ? 's' : ''} added`)
+        if (removed > 0) parts.push(`${removed} removed`)
+        if (modified > 0) parts.push(`${modified} updated`)
+        if (parts.length === 0) parts.push('Survey updated')
+      }
+
+      setChatMessages((prev) => prev.map((m) =>
+        m.id === asstMsgId
+          ? { ...m, loading: false, content: parts.join(', ') + '.', changes: result.changes }
+          : m,
+      ))
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Generation failed. Try rephrasing your prompt.'
-      setGenError(msg)
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error
+        || 'Generation failed. Try rephrasing your prompt.'
+      setChatMessages((prev) => prev.map((m) =>
+        m.id === asstMsgId ? { ...m, loading: false, error: msg } : m,
+      ))
     } finally {
-      setGenLoading(false)
+      setChatLoading(false)
     }
   }
 
@@ -365,23 +430,33 @@ function BuilderContent({ id }: { id: string }) {
   }
 
   const publishContent = (
-    <PublishPanelContent
-      surveyId={id}
-      isPublished={isPublished}
-      publishedUrl={publishedUrl}
-      publishedAt={publishedAt}
-      copied={copied}
-      copiedEmbed={copiedEmbed}
-      publishPending={publishMutation.isPending}
-      unpublishPending={unpublishMutation.isPending}
-      onPublish={() => publishMutation.mutate()}
-      onUnpublish={() => unpublishMutation.mutate()}
-      onCopyLink={copyLink}
-      onCopyEmbed={copyEmbed}
-      onExportJson={exportJson}
-      onExportCsv={exportCsv}
-      onPreview={() => window.open(`/preview/${id}`, '_blank')}
-    />
+    <>
+      <PublishPanelContent
+        surveyId={id}
+        isPublished={isPublished}
+        publishedUrl={publishedUrl}
+        publishedAt={publishedAt}
+        copied={copied}
+        copiedEmbed={copiedEmbed}
+        publishPending={publishMutation.isPending}
+        unpublishPending={unpublishMutation.isPending}
+        onPublish={() => publishMutation.mutate()}
+        onUnpublish={() => unpublishMutation.mutate()}
+        onCopyLink={copyLink}
+        onCopyEmbed={copyEmbed}
+        onOpenEmbed={() => setEmbedModalOpen(true)}
+        onExportJson={exportJson}
+        onExportCsv={exportCsv}
+        onPreview={() => window.open(`/preview/${id}`, '_blank')}
+      />
+      {surveySlug && (
+        <EmbedModal
+          open={embedModalOpen}
+          onClose={() => setEmbedModalOpen(false)}
+          slug={surveySlug}
+        />
+      )}
+    </>
   )
 
   const settingsContent = (tab: SettingsTab, setTab: (t: SettingsTab) => void) => (
@@ -403,7 +478,7 @@ function BuilderContent({ id }: { id: string }) {
           </button>
         ))}
       </div>
-      <div className="p-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
         {tab === 'survey' ? (
           <SurveySettingsContent settings={store.settings} updateSettings={store.updateSettings} />
         ) : (
@@ -413,20 +488,18 @@ function BuilderContent({ id }: { id: string }) {
     </>
   )
 
-  const generateContent = (
-    <div className="p-4">
-      <GeneratePanelContent
-        prompt={genPrompt}
-        setPrompt={setGenPrompt}
-        provider={genProvider}
-        setProvider={setGenProvider}
-        loading={genLoading}
-        error={genError}
-        existingBlockCount={store.nodes.length}
-        onGenerate={handleGenerate}
-      />
-    </div>
-  )
+  const chatPanelProps = {
+    messages: chatMessages,
+    input: chatInput,
+    setInput: setChatInput,
+    onSend: handleChatSend,
+    loading: chatLoading,
+    provider: chatProvider,
+    setProvider: (p: Provider) => {
+      setChatProvider(p)
+      localStorage.setItem('wdym:generate:provider', p)
+    },
+  }
 
   return (
     <div className="h-screen bg-white dark:bg-black flex flex-col">
@@ -556,14 +629,8 @@ function BuilderContent({ id }: { id: string }) {
               )}
 
               {activePanel === 'generate' && (
-                <div className="flex-1 overflow-y-auto p-4">
-                  <GeneratePanelContent
-                    prompt={genPrompt} setPrompt={setGenPrompt}
-                    provider={genProvider} setProvider={setGenProvider}
-                    loading={genLoading} error={genError}
-                    existingBlockCount={store.nodes.length}
-                    onGenerate={handleGenerate}
-                  />
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  <ChatPanel {...chatPanelProps} />
                 </div>
               )}
 
@@ -616,7 +683,7 @@ function BuilderContent({ id }: { id: string }) {
         {/* ── Mobile: generate sheet ── */}
         {isMobile && (
           <BottomSheet open={mobileSheet === 'generate'} onClose={() => setMobileSheet(null)} title="Build with AI" fullHeight>
-            {generateContent}
+            <ChatPanel {...chatPanelProps} />
           </BottomSheet>
         )}
 
@@ -648,11 +715,12 @@ function SectionDivider({ label }: { label: string }) {
 function PublishPanelContent({
   surveyId, isPublished, publishedUrl, publishedAt,
   copied, copiedEmbed, publishPending, unpublishPending,
-  onPublish, onUnpublish, onCopyLink, onCopyEmbed, onExportJson, onExportCsv, onPreview,
+  onPublish, onUnpublish, onCopyLink, onCopyEmbed, onOpenEmbed, onExportJson, onExportCsv, onPreview,
 }: {
   surveyId: string; isPublished: boolean; publishedUrl: string | null; publishedAt: string | null
   copied: boolean; copiedEmbed: boolean; publishPending: boolean; unpublishPending: boolean
   onPublish: () => void; onUnpublish: () => void; onCopyLink: () => void; onCopyEmbed: () => void
+  onOpenEmbed: () => void
   onExportJson: () => void; onExportCsv: () => void; onPreview: () => void
 }) {
   const publicUrl = publishedUrl ? window.location.origin + publishedUrl : null
@@ -709,9 +777,13 @@ function PublishPanelContent({
               <ExternalLink size={12} />
             </a>
           </div>
-          <button onClick={onCopyEmbed} className="flex items-center gap-2 text-xs text-[#71717a] dark:text-[#888] hover:text-[#09090b] dark:hover:text-white border border-[#e4e4e7] dark:border-[#222] px-3 py-2 rounded transition-colors">
+          <button
+            onClick={onOpenEmbed}
+            className="flex items-center gap-2 w-full text-xs text-[#71717a] dark:text-[#888] hover:text-[#09090b] dark:hover:text-white border border-[#e4e4e7] dark:border-[#222] px-3 py-2.5 rounded transition-colors"
+          >
             <Code2 size={11} />
-            {copiedEmbed ? 'Embed code copied!' : 'Copy embed code'}
+            <span className="flex-1 text-left">Embed in your app</span>
+            <ChevronRight size={10} className="text-[#a1a1aa] dark:text-[#444]" />
           </button>
         </div>
       ) : (
@@ -737,14 +809,10 @@ function PublishPanelContent({
         </button>
       </div>
 
-      {isPublished && (
-        <>
-          <SectionDivider label="Analytics" />
-          <a href={`/analytics/${surveyId}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 w-full text-xs text-[#71717a] dark:text-[#888] hover:text-[#09090b] dark:hover:text-white border border-[#e4e4e7] dark:border-[#222] px-3 py-2.5 rounded transition-colors">
-            <BarChart2 size={11} /><span className="flex-1 text-left">View responses & analytics</span><ExternalLink size={10} className="text-[#a1a1aa] dark:text-[#444]" />
-          </a>
-        </>
-      )}
+      <SectionDivider label="Analytics" />
+      <a href={`/analytics/${surveyId}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 w-full text-xs text-[#71717a] dark:text-[#888] hover:text-[#09090b] dark:hover:text-white border border-[#e4e4e7] dark:border-[#222] px-3 py-2.5 rounded transition-colors">
+        <BarChart2 size={11} /><span className="flex-1 text-left">View responses & analytics</span><ExternalLink size={10} className="text-[#a1a1aa] dark:text-[#444]" />
+      </a>
 
       <SectionDivider label="Coming soon" />
       <div className="flex flex-col gap-1.5">
@@ -804,6 +872,201 @@ function SurveySettingsContent({ settings, updateSettings }: { settings: SurveyS
             className="flex-1 text-xs bg-transparent border border-[#e4e4e7] dark:border-[#333] rounded px-3 py-2 text-[#09090b] dark:text-white focus:outline-none focus:border-[#09090b] dark:focus:border-[#888]" />
         </div>
       </div>
+
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs text-[#09090b] dark:text-white">Response Limit</span>
+          <span className="text-[10px] text-[#a1a1aa] dark:text-[#555]">Stop accepting after N completions</span>
+        </div>
+        <Toggle
+          checked={settings.responseLimit != null}
+          onChange={(v) => updateSettings({ responseLimit: v ? 100 : null })}
+        />
+      </div>
+
+      {settings.responseLimit != null && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              value={settings.responseLimit ?? ''}
+              onChange={(e) => {
+                const n = parseInt(e.target.value, 10)
+                updateSettings({ responseLimit: n > 0 ? n : null })
+              }}
+              className="w-24 text-xs bg-transparent border border-[#e4e4e7] dark:border-[#333] rounded px-3 py-2 text-[#09090b] dark:text-white focus:outline-none focus:border-[#09090b] dark:focus:border-[#888] tabular-nums"
+            />
+            <span className="text-xs text-[#a1a1aa] dark:text-[#555]">max responses</span>
+          </div>
+          <input
+            type="text"
+            value={settings.closedMessage || ''}
+            onChange={(e) => updateSettings({ closedMessage: e.target.value })}
+            placeholder="This survey is no longer accepting responses."
+            className="w-full text-xs bg-transparent border border-[#e4e4e7] dark:border-[#333] rounded px-3 py-2 text-[#09090b] dark:text-white placeholder-[#a1a1aa] dark:placeholder-[#444] focus:outline-none focus:border-[#09090b] dark:focus:border-[#888]"
+          />
+          <p className="text-[10px] text-[#a1a1aa] dark:text-[#444]">Message shown to respondents when closed.</p>
+        </div>
+      )}
+
+      {/* ── Access / Auth ── */}
+      <div className="border-t border-[#e4e4e7] dark:border-[#1a1a1a] pt-5 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-[#09090b] dark:text-white flex items-center gap-1.5">
+              <Lock size={12} /> Require Authentication
+            </span>
+            <span className="text-[10px] text-[#a1a1aa] dark:text-[#555]">Respondents must sign in to access</span>
+          </div>
+          <Toggle
+            checked={settings.authRequired}
+            onChange={(v) => updateSettings({ authRequired: v })}
+          />
+        </div>
+
+        {settings.authRequired && (
+          <div className="flex flex-col gap-4">
+            {/* Provider */}
+            <div className="flex flex-col gap-2">
+              <label className={labelCls}>Auth Provider</label>
+              <div className="flex bg-[#f4f4f5] dark:bg-[#1a1a1a] p-1 rounded-lg">
+                {(['wdym', 'google'] as const).map((p) => (
+                  <button key={p} onClick={() => updateSettings({ authProvider: p })}
+                    className={`flex-1 text-xs py-1.5 rounded capitalize transition-all ${settings.authProvider === p ? 'bg-white dark:bg-[#333] text-[#09090b] dark:text-white shadow-sm' : 'text-[#71717a] dark:text-[#888] hover:text-[#09090b] dark:hover:text-white'}`}>
+                    {p === 'wdym' ? 'wdym account' : 'Google OAuth'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Google credentials */}
+            {settings.authProvider === 'google' && (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className={labelCls}>Google Client ID</label>
+                  <input
+                    type="text"
+                    value={settings.googleClientId || ''}
+                    onChange={(e) => updateSettings({ googleClientId: e.target.value })}
+                    placeholder="123456789-abc.apps.googleusercontent.com"
+                    className="text-xs bg-transparent border border-[#e4e4e7] dark:border-[#333] rounded px-3 py-2 text-[#09090b] dark:text-white placeholder-[#a1a1aa] dark:placeholder-[#444] focus:outline-none focus:border-[#09090b] dark:focus:border-[#888]"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className={labelCls}>Google Client Secret</label>
+                  <input
+                    type="password"
+                    value={settings.googleClientSecret || ''}
+                    onChange={(e) => updateSettings({ googleClientSecret: e.target.value })}
+                    placeholder="Will be encrypted on save"
+                    autoComplete="off"
+                    className="text-xs bg-transparent border border-[#e4e4e7] dark:border-[#333] rounded px-3 py-2 text-[#09090b] dark:text-white placeholder-[#a1a1aa] dark:placeholder-[#444] focus:outline-none focus:border-[#09090b] dark:focus:border-[#888]"
+                  />
+                </div>
+                <div className="bg-[#f4f4f5] dark:bg-[#1a1a1a] rounded-lg px-3 py-2">
+                  <p className="text-[10px] text-[#71717a] dark:text-[#888] leading-relaxed">
+                    Add this redirect URI in your Google Cloud Console:
+                  </p>
+                  <p className="text-[10px] font-mono text-[#09090b] dark:text-white mt-1 break-all">
+                    {(import.meta.env.VITE_API_URL || 'http://localhost:4000')}/s/oauth/callback
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Allowlist */}
+            <AllowlistEditor
+              allowlist={settings.allowlist || []}
+              onChange={(list) => updateSettings({ allowlist: list })}
+            />
+
+            {/* Blocked message */}
+            <div className="flex flex-col gap-1.5">
+              <label className={labelCls}>Blocked Message</label>
+              <input
+                type="text"
+                value={settings.allowlistMessage || ''}
+                onChange={(e) => updateSettings({ allowlistMessage: e.target.value })}
+                placeholder="You are not allowed to access this survey."
+                className="text-xs bg-transparent border border-[#e4e4e7] dark:border-[#333] rounded px-3 py-2 text-[#09090b] dark:text-white placeholder-[#a1a1aa] dark:placeholder-[#444] focus:outline-none focus:border-[#09090b] dark:focus:border-[#888]"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function AllowlistEditor({ allowlist, onChange }: { allowlist: string[]; onChange: (list: string[]) => void }) {
+  const [dragging, setDragging] = useState(false)
+  const [rawText, setRawText] = useState(() => allowlist.join('\n'))
+
+  function parseEmails(raw: string): string[] {
+    return raw.split(/[\n,;]+/).map(s => s.trim().toLowerCase()).filter(s => s.includes('@'))
+  }
+
+  function handleBlur() {
+    onChange(parseEmails(rawText))
+  }
+
+  function setFromEmails(emails: string[]) {
+    setRawText(emails.join('\n'))
+    onChange(emails)
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (!file) return
+    Papa.parse<string[]>(file, {
+      complete: (result) => {
+        const emails = result.data.flat().map(s => String(s).trim().toLowerCase()).filter(s => s.includes('@'))
+        setFromEmails(emails)
+      },
+    })
+  }
+
+  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    Papa.parse<string[]>(file, {
+      complete: (result) => {
+        const emails = result.data.flat().map(s => String(s).trim().toLowerCase()).filter(s => s.includes('@'))
+        setFromEmails(emails)
+      },
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <label className={labelCls}>Allowlist</label>
+        {allowlist.length > 0 && (
+          <span className="text-[10px] text-[#a1a1aa] dark:text-[#555]">{allowlist.length} email{allowlist.length !== 1 ? 's' : ''}</span>
+        )}
+      </div>
+      <textarea
+        rows={4}
+        value={rawText}
+        onChange={(e) => setRawText(e.target.value)}
+        onBlur={handleBlur}
+        placeholder="alice@example.com&#10;bob@example.com&#10;(one per line, or paste CSV)"
+        className="text-xs font-mono bg-transparent border border-[#e4e4e7] dark:border-[#333] rounded px-3 py-2 text-[#09090b] dark:text-white placeholder-[#a1a1aa] dark:placeholder-[#444] focus:outline-none focus:border-[#09090b] dark:focus:border-[#888] resize-none"
+      />
+      <label
+        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+        className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-lg px-3 py-3 cursor-pointer transition-colors ${dragging ? 'border-[#09090b] dark:border-white bg-black/5 dark:bg-white/5' : 'border-[#e4e4e7] dark:border-[#333] hover:border-[#a1a1aa] dark:hover:border-[#555]'}`}
+      >
+        <input type="file" accept=".csv" className="hidden" onChange={handleFileInput} />
+        <Upload size={12} className="text-[#a1a1aa] dark:text-[#555]" />
+        <span className="text-[10px] text-[#a1a1aa] dark:text-[#555]">Drop CSV or click to upload</span>
+      </label>
+      <p className="text-[10px] text-[#a1a1aa] dark:text-[#444]">Leave empty to allow all authenticated users.</p>
     </div>
   )
 }
@@ -949,59 +1212,369 @@ function CanvasSettingsContent({ settings, updateSettings }: { settings: SurveyS
   )
 }
 
-// ── Generate panel ─────────────────────────────────────
-function GeneratePanelContent({ prompt, setPrompt, provider, setProvider, loading, error, existingBlockCount, onGenerate }: {
-  prompt: string; setPrompt: (s: string) => void; provider: Provider; setProvider: (p: Provider) => void
-  loading: boolean; error: string | null; existingBlockCount: number; onGenerate: () => void
-}) {
+// ── Embed Modal ────────────────────────────────────────
+
+type EmbedTab = 'iframe' | 'popup' | 'react'
+
+const EMBED_TABS: { id: EmbedTab; label: string }[] = [
+  { id: 'iframe',  label: 'iFrame'  },
+  { id: 'popup',   label: 'JS Popup' },
+  { id: 'react',   label: 'React'   },
+]
+
+function EmbedModal({ open, onClose, slug }: { open: boolean; onClose: () => void; slug: string }) {
+  const [tab, setTab] = useState<EmbedTab>('iframe')
+  const [copied, setCopied] = useState(false)
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const src = `${origin}/s/${slug}?embed=1`
+
+  const snippets: Record<EmbedTab, string> = {
+    iframe: `<iframe
+  src="${src}"
+  width="100%"
+  height="600"
+  frameborder="0"
+  style="border:none; border-radius:8px;"
+></iframe>`,
+    popup: `<script
+  src="${origin}/embed.js"
+  data-survey="${slug}"
+  data-mode="popup"
+  data-label="Give Feedback"
+  data-position="bottom-right"
+  async
+></script>`,
+    react: `<iframe
+  src="${src}"
+  style={{
+    width: '100%',
+    height: '600px',
+    border: 'none',
+    borderRadius: '8px',
+  }}
+  title="Survey"
+/>`,
+  }
+
+  const descriptions: Record<EmbedTab, string> = {
+    iframe:  'Drop this anywhere in your HTML to embed the survey inline.',
+    popup:   'Add to your page\'s <body>. Renders a floating button that opens the survey in a modal.',
+    react:   'Use directly in any React component.',
+  }
+
+  function copy() {
+    navigator.clipboard.writeText(snippets[tab])
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex gap-2">
-        {PROVIDERS.map((p) => (
-          <button key={p.id} onClick={() => setProvider(p.id)} disabled={loading}
-            className={`flex-1 flex flex-col items-center gap-0.5 px-3 py-2.5 border rounded transition-colors disabled:opacity-50 ${provider === p.id ? 'border-[#09090b] dark:border-white bg-[#f4f4f5] dark:bg-[#1a1a1a]' : 'border-[#e4e4e7] dark:border-[#222] hover:border-[#a1a1aa] dark:hover:border-[#444]'}`}>
-            <span className={`text-xs font-medium ${provider === p.id ? 'text-[#09090b] dark:text-white' : 'text-[#71717a] dark:text-[#888]'}`}>{p.label}</span>
-            <span className="text-[10px] text-[#a1a1aa] dark:text-[#555] font-mono">{p.sub}</span>
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            className="fixed inset-0 bg-black/50 dark:bg-black/70 z-50"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={onClose}
+          />
+          <motion.div
+            className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg bg-white dark:bg-[#0a0a0a] border border-[#e4e4e7] dark:border-[#222] rounded-xl shadow-2xl dark:shadow-none flex flex-col"
+            initial={{ opacity: 0, scale: 0.96, x: '-50%', y: '-50%' }}
+            animate={{ opacity: 1, scale: 1, x: '-50%', y: '-50%' }}
+            exit={{ opacity: 0, scale: 0.96, x: '-50%', y: '-50%' }}
+            transition={{ duration: 0.15 }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-[#e4e4e7] dark:border-[#1a1a1a]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-md bg-[#f4f4f5] dark:bg-[#1a1a1a] flex items-center justify-center">
+                  <Code2 size={13} className="text-[#09090b] dark:text-white" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-medium text-[#09090b] dark:text-white">Embed survey</h2>
+                  <p className="text-[11px] text-[#a1a1aa] dark:text-[#555]">Add this survey to any website or app</p>
+                </div>
+              </div>
+              <button onClick={onClose} className="text-[#a1a1aa] dark:text-[#555] hover:text-[#09090b] dark:hover:text-white transition-colors">
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-[#e4e4e7] dark:border-[#1a1a1a] px-5">
+              {EMBED_TABS.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => { setTab(t.id); setCopied(false) }}
+                  className={`py-2.5 text-xs font-medium mr-4 border-b-[1.5px] transition-colors ${
+                    tab === t.id
+                      ? 'border-[#09090b] dark:border-white text-[#09090b] dark:text-white'
+                      : 'border-transparent text-[#71717a] dark:text-[#666] hover:text-[#09090b] dark:hover:text-[#aaa]'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Body */}
+            <div className="px-5 py-4 flex flex-col gap-3">
+              <p className="text-[11px] text-[#71717a] dark:text-[#888]">{descriptions[tab]}</p>
+
+              {/* Code block */}
+              <div className="relative group">
+                <pre className="bg-[#f4f4f5] dark:bg-[#111] border border-[#e4e4e7] dark:border-[#1a1a1a] rounded-lg px-4 py-3.5 text-[11px] font-mono text-[#09090b] dark:text-[#d4d4d8] overflow-x-auto whitespace-pre leading-relaxed">
+                  {snippets[tab]}
+                </pre>
+                <button
+                  onClick={copy}
+                  className="absolute top-2.5 right-2.5 flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-white dark:bg-[#1a1a1a] border border-[#e4e4e7] dark:border-[#333] text-[#71717a] dark:text-[#888] hover:text-[#09090b] dark:hover:text-white transition-colors"
+                >
+                  {copied ? <Check size={10} /> : <Copy size={10} />}
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+
+              {/* Popup-specific options hint */}
+              {tab === 'popup' && (
+                <div className="rounded-lg border border-[#e4e4e7] dark:border-[#1a1a1a] p-3 flex flex-col gap-1.5">
+                  <p className="text-[10px] font-medium text-[#71717a] dark:text-[#888] uppercase tracking-wider">Customise via data attributes</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                    {[
+                      ['data-label', 'Button text'],
+                      ['data-color', 'Button colour (#hex)'],
+                      ['data-position', 'bottom-right / bottom-left'],
+                      ['data-mode', 'popup / inline'],
+                    ].map(([attr, desc]) => (
+                      <div key={attr} className="flex flex-col">
+                        <span className="text-[10px] font-mono text-[#09090b] dark:text-white">{attr}</span>
+                        <span className="text-[10px] text-[#a1a1aa] dark:text-[#555]">{desc}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer note */}
+            <div className="px-5 pb-4">
+              <p className="text-[10px] text-[#a1a1aa] dark:text-[#444]">
+                Survey must be published for the embed to work.
+              </p>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  )
+}
+
+// ── Chat Panel ─────────────────────────────────────────
+
+function ChatEmptyState({ onExampleClick }: { onExampleClick: (s: string) => void }) {
+  const shorts = ['NPS survey with branch logic', 'Employee onboarding feedback', 'Product market fit survey']
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-5 py-8 text-center px-4">
+      <div className="w-10 h-10 rounded-xl bg-[#f4f4f5] dark:bg-[#1a1a1a] flex items-center justify-center">
+        <Sparkles size={16} className="text-[#71717a] dark:text-[#888]" />
+      </div>
+      <div>
+        <p className="text-sm font-medium text-[#09090b] dark:text-white">Build with AI</p>
+        <p className="text-xs text-[#71717a] dark:text-[#555] mt-1.5 leading-relaxed">
+          Describe your survey and I'll build it.<br />Then ask me to modify any part.
+        </p>
+      </div>
+      <div className="flex flex-col gap-2 w-full">
+        {shorts.map((s, i) => (
+          <button
+            key={s}
+            onClick={() => onExampleClick(EXAMPLES[i])}
+            className="text-left text-[11px] text-[#71717a] dark:text-[#666] hover:text-[#09090b] dark:hover:text-[#aaa] border border-[#e4e4e7] dark:border-[#1a1a1a] hover:border-[#a1a1aa] dark:hover:border-[#333] rounded-lg px-3 py-2.5 transition-colors"
+          >
+            {s} →
           </button>
         ))}
       </div>
+    </div>
+  )
+}
 
-      <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)}
-        onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') onGenerate() }}
-        placeholder={EXAMPLES[0]} rows={6} disabled={loading}
-        className="w-full bg-[#fafafa] dark:bg-[#111] border border-[#e4e4e7] dark:border-[#222] rounded text-sm text-[#09090b] dark:text-white placeholder-[#a1a1aa] dark:placeholder-[#444] px-3 py-2.5 focus:outline-none focus:border-[#a1a1aa] dark:focus:border-[#444] transition-colors resize-none disabled:opacity-50" />
+function ChatUserMessage({ content }: { content: string }) {
+  return (
+    <div className="flex justify-end">
+      <div className="max-w-[85%] bg-[#09090b] dark:bg-white text-white dark:text-black text-xs px-3.5 py-2.5 rounded-2xl rounded-tr-sm leading-relaxed whitespace-pre-wrap break-words">
+        {content}
+      </div>
+    </div>
+  )
+}
 
-      <div>
-        <p className="text-[10px] text-[#a1a1aa] dark:text-[#444] mb-1.5">Examples</p>
-        <div className="flex flex-col gap-1.5">
-          {EXAMPLES.map((ex, i) => (
-            <button key={i} onClick={() => setPrompt(ex)} disabled={loading}
-              className="text-left text-[11px] text-[#71717a] dark:text-[#666] hover:text-[#09090b] dark:hover:text-[#aaa] transition-colors line-clamp-2 disabled:opacity-50">
-              → {ex}
+function ChatAssistantMessage({ message }: { message: ChatMessage }) {
+  const avatar = (
+    <div className="w-5 h-5 rounded-full bg-[#f4f4f5] dark:bg-[#1a1a1a] flex items-center justify-center shrink-0 mt-0.5">
+      <Sparkles size={10} className="text-[#71717a] dark:text-[#888]" />
+    </div>
+  )
+
+  if (message.loading) {
+    return (
+      <div className="flex items-start gap-2">
+        {avatar}
+        <div className="bg-[#f4f4f5] dark:bg-[#1a1a1a] rounded-2xl rounded-tl-sm px-3.5 py-3">
+          <div className="flex gap-1 items-center h-3">
+            {[0, 1, 2].map((i) => (
+              <motion.div
+                key={i}
+                className="w-1.5 h-1.5 rounded-full bg-[#a1a1aa] dark:bg-[#555]"
+                animate={{ opacity: [0.3, 1, 0.3] }}
+                transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.22 }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (message.error) {
+    return (
+      <div className="flex items-start gap-2">
+        <div className="w-5 h-5 rounded-full bg-red-50 dark:bg-red-950/30 flex items-center justify-center shrink-0 mt-0.5">
+          <X size={10} className="text-red-500" />
+        </div>
+        <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-2xl rounded-tl-sm px-3.5 py-2.5 text-xs text-red-600 dark:text-red-400 leading-relaxed max-w-[85%]">
+          {message.error}
+        </div>
+      </div>
+    )
+  }
+
+  const { changes } = message
+  return (
+    <div className="flex items-start gap-2">
+      {avatar}
+      <div className="flex flex-col gap-1.5 max-w-[85%]">
+        <div className="bg-[#f4f4f5] dark:bg-[#1a1a1a] rounded-2xl rounded-tl-sm px-3.5 py-2.5 text-xs text-[#09090b] dark:text-white leading-relaxed">
+          {message.content}
+        </div>
+        {changes && (changes.added > 0 || changes.removed > 0 || changes.modified > 0) && (
+          <div className="flex gap-1.5 flex-wrap pl-1">
+            {changes.added > 0 && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 font-mono font-medium">
+                +{changes.added}
+              </span>
+            )}
+            {changes.removed > 0 && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-950/30 text-red-500 dark:text-red-400 font-mono font-medium">
+                −{changes.removed}
+              </span>
+            )}
+            {changes.modified > 0 && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#e4e4e7] dark:bg-[#222] text-[#71717a] dark:text-[#888] font-mono font-medium">
+                ~{changes.modified}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ChatPanel({
+  messages, input, setInput, onSend, loading, provider, setProvider,
+}: {
+  messages: ChatMessage[]
+  input: string
+  setInput: (v: string) => void
+  onSend: () => void
+  loading: boolean
+  provider: Provider
+  setProvider: (p: Provider) => void
+}) {
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  function handleInputChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    setInput(e.target.value)
+    e.target.style.height = 'auto'
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault()
+      onSend()
+    }
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Message list */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3 min-h-0">
+        {messages.length === 0 ? (
+          <ChatEmptyState onExampleClick={(s) => {
+            setInput(s)
+            textareaRef.current?.focus()
+          }} />
+        ) : (
+          messages.map((msg) =>
+            msg.role === 'user'
+              ? <ChatUserMessage key={msg.id} content={msg.content} />
+              : <ChatAssistantMessage key={msg.id} message={msg} />
+          )
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input area */}
+      <div className="border-t border-[#e4e4e7] dark:border-[#1a1a1a] px-3 pt-3 pb-3 flex flex-col gap-2.5 shrink-0">
+        {/* Provider toggle */}
+        <div className="flex gap-1.5">
+          {PROVIDERS.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => setProvider(p.id)}
+              disabled={loading}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium transition-colors disabled:opacity-50 ${
+                provider === p.id
+                  ? 'bg-[#09090b] dark:bg-white text-white dark:text-black'
+                  : 'bg-[#f4f4f5] dark:bg-[#1a1a1a] text-[#71717a] dark:text-[#888] hover:bg-[#e4e4e7] dark:hover:bg-[#222]'
+              }`}
+            >
+              {p.label}
             </button>
           ))}
         </div>
-      </div>
 
-      {existingBlockCount > 0 && (
-        <p className="text-[11px] text-[#a1a1aa] dark:text-[#555] flex items-start gap-1.5">
-          <AlertCircle size={11} className="mt-0.5 shrink-0" />
-          This will replace your {existingBlockCount} existing block{existingBlockCount !== 1 ? 's' : ''}.
+        {/* Textarea + send */}
+        <div className="flex items-end gap-2">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            placeholder={messages.length === 0 ? 'Describe your survey…' : 'Ask me to edit anything…'}
+            rows={1}
+            disabled={loading}
+            className="flex-1 resize-none bg-[#f4f4f5] dark:bg-[#111] border border-[#e4e4e7] dark:border-[#222] rounded-xl text-xs text-[#09090b] dark:text-white placeholder-[#a1a1aa] dark:placeholder-[#444] px-3 py-2.5 focus:outline-none focus:border-[#a1a1aa] dark:focus:border-[#444] transition-colors disabled:opacity-50 leading-relaxed"
+            style={{ minHeight: 38, maxHeight: 120 }}
+          />
+          <button
+            onClick={onSend}
+            disabled={!input.trim() || loading}
+            className="shrink-0 w-8 h-8 flex items-center justify-center bg-[#09090b] dark:bg-white text-white dark:text-black rounded-lg disabled:opacity-25 transition-opacity active:scale-95"
+          >
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <ArrowUp size={12} />}
+          </button>
+        </div>
+        <p className="text-[9px] text-[#a1a1aa] dark:text-[#444]">
+          <kbd className="font-mono bg-[#f4f4f5] dark:bg-[#1a1a1a] px-1 rounded">⌘↵</kbd> to send
         </p>
-      )}
-      {error && (
-        <p className="text-[11px] text-red-500 flex items-start gap-1.5">
-          <AlertCircle size={11} className="mt-0.5 shrink-0" /> {error}
-        </p>
-      )}
-
-      <div className="flex items-center justify-between pt-1">
-        <span className="text-[10px] text-[#a1a1aa] dark:text-[#444]">
-          <kbd className="font-mono bg-[#f4f4f5] dark:bg-[#1a1a1a] px-1 rounded">⌘↵</kbd> generate
-        </span>
-        <Button size="sm" onClick={onGenerate} disabled={!prompt.trim() || loading} className="flex items-center gap-1.5">
-          {loading ? <><Loader2 size={12} className="animate-spin" /> Generating…</> : <><Sparkles size={12} /> Generate</>}
-        </Button>
       </div>
     </div>
   )

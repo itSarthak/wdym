@@ -116,6 +116,22 @@ export default function Register() {
               exit={{ opacity: 0, x: -16 }}
               transition={{ duration: 0.2 }}
             >
+              {/* Pill toggle */}
+              <div className="flex bg-[#f4f4f5] dark:bg-[#111] rounded-full p-1 mb-8">
+                <Link
+                  to="/login"
+                  className="flex-1 rounded-full px-4 py-1.5 text-sm font-medium text-center transition-all duration-200 text-[#71717a] dark:text-[#555] hover:text-[#09090b] dark:hover:text-white"
+                >
+                  Sign in
+                </Link>
+                <button
+                  type="button"
+                  className="flex-1 rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 bg-white dark:bg-[#1c1c1c] text-[#09090b] dark:text-white shadow-sm"
+                >
+                  Register
+                </button>
+              </div>
+
               <div className="mb-8">
                 <h1 className="text-xl font-semibold tracking-tight text-[#09090b] dark:text-white">wdym</h1>
                 <p className="text-sm text-[#71717a] dark:text-[#555] mt-1">Create your account</p>
@@ -149,12 +165,6 @@ export default function Register() {
                 </Button>
               </form>
 
-              <p className="text-xs text-[#a1a1aa] dark:text-[#555] mt-6 text-center">
-                Already have an account?{' '}
-                <Link to="/login" className="text-[#09090b] dark:text-white hover:underline">
-                  Sign in
-                </Link>
-              </p>
             </motion.div>
           ) : (
             <motion.div

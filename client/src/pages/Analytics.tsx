@@ -1143,11 +1143,13 @@ export default function Analytics() {
           </button>
           <div className="min-w-0">
             <p className="text-sm font-medium truncate">{data.title}</p>
-            {data.publishedAt && (
-              <p className="text-[10px] text-[#a1a1aa] dark:text-[#555]">
-                Published {new Date(data.publishedAt).toLocaleDateString()}
-              </p>
-            )}
+            <p className="text-[10px] text-[#a1a1aa] dark:text-[#555]">
+              {data.published
+                ? data.publishedAt
+                  ? `Published ${new Date(data.publishedAt).toLocaleDateString()}`
+                  : 'Published'
+                : 'Unpublished · analytics still available'}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">

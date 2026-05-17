@@ -22,18 +22,18 @@ function StatItem({ value, label, format }: any) {
   }, [inView, value, count])
 
   return (
-    <div ref={ref} className="flex flex-col items-center justify-center p-8 border-r border-black/8 dark:border-white/8 last:border-r-0 max-sm:even:border-r-0 max-sm:[&:nth-child(n+3)]:border-t border-t-black/8 dark:border-t-white/8 sm:border-t-0">
+    <div ref={ref} className="flex flex-col items-center justify-center p-8 border-r border-[#e4e4e7] dark:border-[#222] last:border-r-0 max-sm:even:border-r-0 max-sm:[&:nth-child(n+3)]:border-t border-t-[#e4e4e7] dark:border-t-[#222] sm:border-t-0">
       <motion.div className="text-3xl font-bold tracking-tight text-black dark:text-white">
         {display}
       </motion.div>
-      <div className="text-xs text-zinc-500 mt-1 text-center">{label}</div>
+      <div className="text-xs text-[#71717a] dark:text-[#555] mt-1 text-center">{label}</div>
     </div>
   )
 }
 
 export default function StatsBar() {
   return (
-    <section className="w-full border-y border-black/8 dark:border-white/8 bg-transparent">
+    <section className="w-full border-y border-[#e4e4e7] dark:border-[#222] bg-transparent">
       <div className="max-w-6xl mx-auto grid grid-cols-2 sm:grid-cols-4">
         {stats.map((stat, i) => (
           <StatItem key={i} {...stat} />
